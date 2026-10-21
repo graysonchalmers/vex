@@ -8,6 +8,47 @@ import { n } from "../core/util.ts";
 import { outlineText, png, previewSvg } from "./raster.ts";
 import { writeSpine } from "./spine.ts";
 import { writeLevel } from "./level.ts";
+import { writeFont } from "./font.ts";
+import { deflateSync } from "node:zlib";
+import { Resvg } from "@resvg/resvg-js";
+import { png as encodePng } from "../core/png.ts";
+
+/** Stretch a sprite with 9-slice margins (corners fixed, edges stretch one way, center both). */
+export function nineSlice(src: Uint8Array, W: number, H: number, m: number[], outW: number, outH: number): Uint8Array {
+  const [l, t, r, b] = m, out = new Uint8Array(outW * outH * 4);
+  const map = (o: number, size: number, a: number, z: number, outSize: number) => {
+    if (o < a) return o;
+    if (o >= outSize - z) return size - (outSize - o);
+    const inner = size - a - z, outInner = outSize - a - z;
+    return a + Math.min(inner - 1, Math.floor(((o - a) * inner) / Math.max(1, outInner)));
+  };
+  for (let y = 0; y < outH; y++) {
+    const sy = map(y, H, t, b, outH);
+    for (let x = 0; x < outW; x++) {
+      const sx = map(x, W, l, r, outW), si = (sy * W + sx) * 4, di = (y * outW + x) * 4;
+      out[di] = src[si]; out[di + 1] = src[si + 1]; out[di + 2] = src[si + 2]; out[di + 3] = src[si + 3];
+    }
+  }
+  return out;
+}
+
+function ninePreview(svg: string, W: number, H: number, m: number[]): Buffer {
+  const img = new Resvg(svg, { font: { loadSystemFonts: svg.includes("<text") } }).render();
+  const sizes = [[W, H], [W * 2.5, H], [W * 1.5, H * 2]].map(([w, h]) => [Math.round(w), Math.round(h)]);
+  const gap = 12, CW = sizes.reduce((a, [w]) => a + w + gap, gap), CH = Math.max(...sizes.map(([, h]) => h)) + gap * 2;
+  const canvas = new Uint8Array(CW * CH * 4);
+  for (let i = 0; i < CW * CH; i++) canvas.set([35, 32, 51, 255], i * 4);
+  let x = gap;
+  for (const [w, h] of sizes) {
+    const part = nineSlice(img.pixels, img.width, img.height, m, w, h);
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+      const si = (yy * w + xx) * 4, di = ((gap + yy) * CW + x + xx) * 4, a = part[si + 3] / 255;
+      for (let c = 0; c < 3; c++) canvas[di + c] = Math.round(part[si + c] * a + canvas[di + c] * (1 - a));
+    }
+    x += w + gap;
+  }
+  return Buffer.from(encodePng(CW, CH, canvas, (b) => deflateSync(b)));
+}
 
 export interface OutputOptions {
   /** Only these assets/sheets (default: everything exported). */
@@ -85,7 +126,7 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
   const sheetNames = new Set(p.sheets.map((s) => s.name));
   if (opts.only)
     for (const x of opts.only)
-      if (!p.assets.has(x) && !sheetNames.has(x) && !p.spines.some((sp) => sp.name === x))
+      if (!p.assets.has(x) && !sheetNames.has(x) && !p.spines.some((sp) => sp.name === x) && !p.fonts.some((fd) => fd.name === x) && !p.levels.some((lv) => lv.name === x))
         errors.push(new VexError(`unknown asset or sheet '${x}'${didYouMean(x, [...p.order, ...sheetNames])}`));
   const want = opts.only ? new Set(opts.only) : undefined;
   const names = want ? p.order.filter((x) => want.has(x)) : p.exported();
@@ -100,6 +141,15 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
         write(join(dir, name + ".svg"), outlineText(svg));
         for (const m of scales) write(join(dir, name + suffix(m) + ".png"), png(p.svg(name, 0, b.scale * m)));
         if (opts.preview !== false) write(join(out, "_preview", name + ".png"), png(previewSvg(svg, b.box, { grid: opts.grid })));
+        if (def.opts.slice) {
+          // 9-slice: margins in output pixels, plus a preview stretched to three sizes the way engines draw it.
+          const [l, t, r, bt] = def.opts.slice.map((v) => Math.round(v * b.scale));
+          const W = Math.round(b.box.w * b.scale), H = Math.round(b.box.h * b.scale);
+          write(join(dir, name + ".9.json"), JSON.stringify({ image: name + ".png", width: W, height: H, slice: { left: l, top: t, right: r, bottom: bt },
+            godot: { patch_margin_left: l, patch_margin_top: t, patch_margin_right: r, patch_margin_bottom: bt },
+            unity: { border: [l, bt, r, t] } }, null, 2) + "\n");
+          if (opts.preview !== false) write(join(out, "_preview", name + ".9.png"), ninePreview(p.svg(name, 0, b.scale), W, H, [l, t, r, bt]));
+        }
         lines.push(`${def.kind} ${name} ${n(b.box.w * b.scale)}x${n(b.box.h * b.scale)}`);
       } else {
         const ms = Math.round(1000 / b.fps);
@@ -123,6 +173,11 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
     } catch (e) {
       errors.push(wrap(e));
     }
+  }
+
+  for (const fd of p.fonts) {
+    if (want && !want.has(fd.name)) continue;
+    try { lines.push(writeFont(p, fd, out)); } catch (e) { errors.push(wrap(e).within(`font '${fd.name}'`, fd.loc)); }
   }
 
   for (const lv of p.levels) {

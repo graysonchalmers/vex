@@ -56,6 +56,17 @@ The same rig drives the LAST CUP robot's arm: ▶ **[watch him drink, 10 s with 
 A shoulder, elbow, hand and cup chain lifts the mug to his jaw while the cup bone counter-rotates
 to keep the coffee level, and the room keeps its own 2 s rhythm of rain, flicker and grain.
 
+### UI kit
+
+![9-slice panel stretched to three sizes](docs/media/ui_nine_slice.png)
+
+Stretchable 9-slice panels, buttons, bars and slots with margins exported for Godot, Unity and Phaser,
+icons, and **bitmap fonts** (BMFont .fnt + .xml + atlas) with outline and shadow, all verified
+in Phaser: its own `nineslice` objects and `bitmapText` using the exported files.
+Source: [`ui_kit.vx.js`](showcase/ui_kit.vx.js)
+
+![Title bitmap font atlas](docs/media/ui_font_title.png)
+
 ### Visual effects
 
 ![Fire, magic, smoke, explosion, hit and dust](docs/media/vfx_showreel.gif)
@@ -131,6 +142,7 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
 - **Structure:** `tf` transform groups, `sym` mirroring, `clip` for cel shading and highlights,
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.
+- **UI:** 9-slice metadata (`slice`) for Godot / Unity / Phaser and bitmap fonts (`font()`, BMFont).
 - **Particles:** `particles()` for fire, smoke, explosions, magic, hits and dust, as looping or one-shot anims.
 - **Levels:** `tileset()` + `level()` with autotiling, game objects and generated maps; Tiled .tmj / .tmx export.
 - **Skeletal animation:** `rig()` bone hierarchies with pivots and draw order, `pose()` with keyframed

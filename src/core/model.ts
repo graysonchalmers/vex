@@ -129,6 +129,8 @@ export interface AssetOpts {
   ow?: number;
   /** Export pixels per unit (default 1). */
   scale?: number;
+  /** 9-slice margins [left, top, right, bottom] in units, for stretchable UI. */
+  slice?: [number, number, number, number];
   frames?: number;
   fps?: number;
 }

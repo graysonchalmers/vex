@@ -254,3 +254,29 @@ test("particles: deterministic, seamless loops, bursts start on time", async () 
   throwsMsg(() => loadSource(`particles({ at: [0, 0], rate: 1, shpe: "spark" })`), /unknown option 'shpe' \(did you mean 'shape'\?\)/);
   throwsMsg(() => loadSource(`particles({ at: [0, 0] })`), /needs a rate .* or a burst/);
 });
+
+test("9-slice keeps corners and stretches the middle; bitmap fonts write BMFont files", async () => {
+  const { nineSlice } = await import("../src/node/output.ts");
+  // 4x4 source: corners red, everything else blue; slice 1 px on every side
+  const src = new Uint8Array(16 * 4);
+  for (let i = 0; i < 16; i++) { const x = i % 4, y = Math.floor(i / 4), corner = (x === 0 || x === 3) && (y === 0 || y === 3); src.set(corner ? [255, 0, 0, 255] : [0, 0, 255, 255], i * 4); }
+  const out = nineSlice(src, 4, 4, [1, 1, 1, 1], 10, 6);
+  const px = (x: number, y: number) => [...out.subarray((y * 10 + x) * 4, (y * 10 + x) * 4 + 3)];
+  assert.deepEqual(px(0, 0), [255, 0, 0]); assert.deepEqual(px(9, 5), [255, 0, 0]); assert.deepEqual(px(9, 0), [255, 0, 0]);
+  assert.deepEqual(px(1, 0), [0, 0, 255]); assert.deepEqual(px(5, 3), [0, 0, 255]);
+
+  const { writeFont } = await import("../src/node/font.ts");
+  const p = loadSource(`font("f", { size: 20, chars: "AB i", outline: 1, outlineColor: "0" })`);
+  const dir = mkdtempSync(join(tmpdir(), "vex-"));
+  try {
+    writeFont(p, p.fonts[0], dir);
+    const xml = readFileSync(join(dir, "fonts/f.xml"), "utf8");
+    assert.match(xml, /<chars count="4">/);
+    const adv = (id: number) => Number(new RegExp(`<char id="${id}" [^>]*xadvance="(\\d+)"`).exec(xml)![1]);
+    assert.ok(adv(32) > 0 && adv(32) < adv(65), "space has an advance, narrower than A");
+    assert.ok(adv(105) < adv(66), "i is narrower than B");
+    assert.match(readFileSync(join(dir, "fonts/f.fnt"), "utf8"), /^info face="Open Sans" size=20 .*\ncommon lineHeight=26 /);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

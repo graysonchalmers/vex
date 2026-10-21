@@ -140,6 +140,20 @@ anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, WALK))
 equal the first. Stamped anims follow their parent's progress; to keep a short cycle at its own speed
 inside a longer clip, stamp it with an explicit frame: `(f) => stamp("cycle", 0, 0, { frame: f.i % 24 })`.
 
+## UI: 9-slice and bitmap fonts
+
+```js
+sprite("ui_panel", { w: 48, h: 48, scale: 3, slice: [12, 12, 12, 12] }, ...)   // left, top, right, bottom (units)
+font("title", { family: "Open Sans", weight: 800, size: 48, fill: "gd2", outline: 3, outlineColor: "k", shadow: [0, 4] })
+```
+
+`slice` writes `out/sprites/<name>.9.json` (margins in pixels, plus Godot `patch_margin_*` and Unity
+`border` values) and `out/_preview/<name>.9.png`, the sprite stretched to three sizes. `font()` renders
+`chars` (default: printable ASCII) into `out/fonts/<name>.png` with BMFont text (`.fnt`) and XML
+(`.xml`, what Phaser, libGDX and most engines load). Options: `family`, `weight`, `size` (px), `fill`,
+`outline` + `outlineColor`, `shadow` `[dx, dy]` + `shadowColor`. Glyphs are rendered from the installed
+font (found with fontconfig when available), so the font must be installed when you build.
+
 ## Particles (VFX)
 
 ```js

@@ -14,7 +14,7 @@ import { type Box, serialize, svgDoc } from "./svg.ts";
 import { fmtArgs, globRe, hash, n, pickRange, rng } from "./util.ts";
 
 const ASSET_OPTS: Record<AssetKind, string[]> = {
-  sprite: ["w", "h", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale"],
+  sprite: ["w", "h", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale", "slice"],
   scene: ["w", "h", "bg", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale"],
   anim: ["w", "h", "bg", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale", "frames", "fps"],
 };
@@ -134,6 +134,7 @@ export class Project {
   readonly spines: SpineDef[] = [];
   readonly tilesets = new Map<string, TilesetDef>();
   readonly levels: LevelDef[] = [];
+  readonly fonts: FontDef[] = [];
   /** Art files loaded so far (absolute paths or virtual names), for locations and watching. */
   readonly files: string[] = [];
   pal: Palette = Palette.builtin("sweetie16");
@@ -340,6 +341,17 @@ export class Project {
           default: return E.circle(q.x, q.y, q.size / 2, { fill: q.color, ...st });
         }
       });
+    });
+    env.font = (name: unknown, o: unknown = {}) => at("font", (loc) => {
+      if (typeof name !== "string" || !isPlain(o)) throw new VexError('font("name", { family, size, weight, chars, fill, outline, outlineColor, shadow, shadowColor })');
+      const keys = ["family", "size", "weight", "chars", "fill", "outline", "outlineColor", "shadow", "shadowColor"];
+      checkKeys(`font '${name}'`, o, keys);
+      const fd: FontDef = { name, family: String(o.family ?? "Open Sans"), size: Number(o.size ?? 32), weight: Number(o.weight ?? 700),
+        chars: String(o.chars ?? " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"),
+        fill: String(o.fill ?? "#ffffff"), outline: Number(o.outline ?? 0), outlineColor: String(o.outlineColor ?? "#000000"),
+        shadow: (o.shadow as [number, number]) ?? [0, 0], shadowColor: String(o.shadowColor ?? "#000000"), loc };
+      for (const c of [fd.fill, fd.outlineColor, fd.shadowColor]) this.pal.resolve(c);
+      this.fonts.push(fd);
     });
     env.platformer = (keys: unknown) => at("platformer", () => {
       const need = ["top", "topL", "topR", "fill", "fillL", "fillR"];
@@ -664,6 +676,20 @@ function stepOf(item: unknown, def: AssetDef): Step {
   if (typeof item === "function") return { label: "ƒ(f)", loc: def.loc };
   if (Array.isArray(item)) return { label: `[${item.length} items]`, loc: def.loc };
   return { label: "item", loc: def.loc };
+}
+
+export interface FontDef {
+  name: string;
+  family: string;
+  size: number;
+  weight: number;
+  chars: string;
+  fill: string;
+  outline: number;
+  outlineColor: string;
+  shadow: [number, number];
+  shadowColor: string;
+  loc?: string;
 }
 
 export interface TilesetDef {

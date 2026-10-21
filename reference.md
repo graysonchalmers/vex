@@ -109,6 +109,37 @@ The last argument is the style: a color (fill; stroke for `line`, `curve`, `arc`
 | `tile(name, x, y, cols, rows, opts?)` | Grid of copies; `dx`, `dy` spacing (default the asset size) + stamp options. |
 | `scatter(name, x, y, w, h, count, opts?)` | Random copies inside the area, reproducible. Anchor defaults to `"center"`. `scale` and `rot` take `[min, max]`; `flip: "x"` flips half of them at random. Copies of anims get increasing `delay`. |
 
+## Skeletal animation
+
+```js
+const HERO = rig({
+  torso: { pivot: [24, 40], z: 4, items: [...] },                 // a root bone
+  head:  { parent: "torso", pivot: [24, 25], z: 7, items: [...] },
+  armB:  { parent: "torso", pivot: [24, 28], z: 0, items: [...] },  // behind the torso, still follows it
+})
+const WALK = {
+  armB: { rot: [[0, -22], [4, 22], [8, -22]] },                   // [frame, value, ease into the next key]
+  torso: { move: [[0, [0, 0]], [2, [0, -1.4]], [4, [0, 0]]], rot: (f) => f.sin(2) },
+}
+anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, WALK))
+```
+
+| Part | Meaning |
+|---|---|
+| bone `pivot` | Joint position in the asset's coordinates, in the rest pose. The bone rotates and scales about it. |
+| bone `parent` | Children inherit their parent's motion (shoulder → elbow → hand). |
+| bone `z` | Draw order, higher on top (default: declaration order). Independent of the hierarchy. |
+| bone `items` | What the bone draws, in rest-pose coordinates. Any items, including stamps and functions. |
+| channel `rot` | Degrees, clockwise. |
+| channel `move` | `[dx, dy]` offset. |
+| channel `scale` | Number or `[sx, sy]` about the pivot. |
+| keys | `[[frame, value, ease?], ...]` with increasing frames; values hold before the first key and after the last. A function `(f) => value` works too. |
+| ease | Into the next key: `inOut` (default), `linear`, `in`, `out`, `step`. |
+
+`pose(rig)` with no clip is the rest pose. For a seamless loop, make the last key (at frame `frames`)
+equal the first. Stamped anims follow their parent's progress; to keep a short cycle at its own speed
+inside a longer clip, stamp it with an explicit frame: `(f) => stamp("cycle", 0, 0, { frame: f.i % 24 })`.
+
 ## Output
 
 `vex build art.vx.js [--out DIR] [--only a,b] [--scales 1,2] [--no-preview] [--no-grid]`

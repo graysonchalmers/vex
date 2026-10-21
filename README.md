@@ -7,6 +7,9 @@ A live viewer rebuilds on save and replays each asset step by step.
 
 Built for AI agents (it ships as a Claude Code skill) and just as usable by hand.
 
+> Part of a family: **vex** (vector art), [**chirp**](https://github.com/uilianks/chirp) (game audio) and
+> [**kiln**](https://github.com/uilianks/kiln) (low-poly and voxel 3D).
+>
 > Inspired by [**claude-pxl**](https://github.com/crsolver/claude-pxl) by crsolver, a pixel-art
 > DSL for agents. vex takes its architecture (sandboxed art files, lazy cached builds, located
 > errors, live painting viewer) and redesigns it for vectors: smooth shapes, gradients, glow,
@@ -25,6 +28,30 @@ source: [`noir_cafe.vx.js`](showcase/noir_cafe.vx.js)
 
 Rain on the glass, a backwards neon sign with a dying letter, flickering CRT, smoke and steam,
 film grain, all procedural and looping.
+
+### Skeletal animation
+
+![Rigged hero: idle, walk, run, jump and attack](docs/media/rig_showreel.gif)
+
+The Forest Kit hero as a 13-bone rig: hips, torso, head, two-part arms and legs, and a sword in
+his hand. Five keyframed clips with easing, exported like any vex anim (strips, atlas + JSON).
+Source: [`rigged.vx.js`](showcase/rigged.vx.js)
+
+```js
+const HERO = rig({
+  torso:    { pivot: [24, 40], z: 4, items: [rect(19, 24, 10, 16, { fill: "tn1", r: 3.5 })] },
+  armF:     { parent: "torso", pivot: [24, 28], z: 8, items: [line([24, 28, 24, 35], { stroke: "tn1", sw: 4 })] },
+  forearmF: { parent: "armF", pivot: [24, 35], z: 8, items: [line([24, 35, 24, 41], { stroke: "sk1", sw: 3.6 })] },
+})
+anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, {
+  armF: { rot: [[0, 22], [4, -22], [8, 22]] },          // [frame, degrees, ease into the next key]
+  forearmF: { rot: [[0, -20], [4, -40], [8, -20]] },
+}))
+```
+
+The same rig drives the LAST CUP robot's arm: ▶ **[watch him drink, 10 s with sound](docs/media/last_cup_sip.mp4)**.
+A shoulder, elbow, hand and cup chain lifts the mug to his jaw while the cup bone counter-rotates
+to keep the coffee level, and the room keeps its own 2 s rhythm of rain, flicker and grain.
 
 ### Forest Kit: a game-ready platformer pack
 
@@ -77,6 +104,8 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
 - **Structure:** `tf` transform groups, `sym` mirroring, `clip` for cel shading and highlights,
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.
+- **Skeletal animation:** `rig()` bone hierarchies with pivots and draw order, `pose()` with keyframed
+  rotation, offset and scale clips, five easings, procedural channels.
 - **Animation:** `(f) => items` functions per frame (`f.t`, `f.sin`, `f.cos`, `f.rng`). Anims
   stamped inside anims follow their frames.
 - **Output:** SVG, PNG at any scale, animation strips, atlases + JSON for Phaser, PixiJS, Godot

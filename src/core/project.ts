@@ -1,6 +1,7 @@
 // Project: the registry an art file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into resolved node trees.
 import { VexError, didYouMean, wrap } from "./errors.ts";
+import { checkClip, isRig, makeRig, sample } from "./rig.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
   type AssetDef, type AssetKind, type AssetOpts, type FrameInfo, type GroupDef, type Grad, type Item, type Node,
@@ -308,6 +309,27 @@ export class Project {
     env.clip = (mask: unknown, ...items: unknown[]): Ref => at("clip", (loc) => {
       if (!isNode(mask) && !Array.isArray(mask)) throw new VexError("clip(maskShape, ...items): the mask is a shape like circle(...) or a list of shapes");
       return { __ref: "clip", args: [mask, ...items], step: { label: "clip(…)", loc } };
+    });
+    env.rig = (spec: unknown) => at("rig", () => makeRig(spec));
+    env.pose = (rg: unknown, clip: unknown = {}) => at("pose", () => {
+      if (!isRig(rg)) throw new VexError("pose(rig, clip): the first argument must come from rig({ ... })");
+      const c = checkClip(rg, clip);
+      const tf = env.tf as (o: unknown, ...items: unknown[]) => Ref;
+      // Each bone is drawn in z order, wrapped in its chain's transforms (root outermost), so the
+      // hierarchy decides where it goes and z decides what is on top.
+      return (f: FrameInfo) => rg.order.map((name) => {
+        let item: unknown = rg.bones.get(name)!.items;
+        const chain = rg.chains.get(name)!;
+        for (let k = chain.length - 1; k >= 0; k--) {
+          const b = rg.bones.get(chain[k])!, keys = c[chain[k]] ?? {};
+          const rot = keys.rot ? sample(keys.rot, f) : 0;
+          const mv = keys.move ? sample(keys.move, f) : [0, 0];
+          const sc = keys.scale ? sample(keys.scale, f) : 1;
+          if (!rot && !mv[0] && !mv[1] && sc === 1) continue;
+          item = tf({ x: mv[0], y: mv[1], rot, scale: sc, origin: b.pivot }, item);
+        }
+        return item;
+      });
     });
     return env;
   }

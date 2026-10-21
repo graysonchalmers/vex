@@ -129,3 +129,39 @@ sheet("atlas", ["dot", "pulse"], { pad: 1 })`;
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("rig: keyframes interpolate with easing and hold outside their range", async () => {
+  const { sample } = await import("../src/core/rig.ts");
+  const fi = (i: number) => ({ i, n: 10, t: i / 10, sin: () => 0, cos: () => 0, rng: () => () => 0 });
+  const tr: [number, number, string?][] = [[2, 0, "linear"], [6, 40], [8, 0, "step"], [9, 100]];
+  assert.equal(sample(tr as never, fi(0)), 0);           // before the first key: hold
+  assert.equal(sample(tr as never, fi(4)), 20);          // linear halfway
+  assert.equal(sample(tr as never, fi(7)), 20);          // default inOut halfway is the midpoint
+  assert.equal(sample(tr as never, fi(8.5)), 0);         // step holds until the next key
+  assert.equal(sample(tr as never, fi(10)), 100);        // after the last key: hold
+  assert.deepEqual(sample([[0, [0, 0]], [10, [10, -20]]] as never, fi(5)), [5, -10]);
+});
+
+test("rig: children follow their parent's pivot; z order is independent of the hierarchy", () => {
+  const src = `const R = rig({
+  arm: { pivot: [10, 10], z: 2, items: [rect(10, 10, 2, 10, "1")] },
+  hand: { parent: "arm", pivot: [10, 20], z: 0, items: [circle(10, 22, 2, "2")] },
+})
+anim("a", { w: 40, h: 40, frames: 4 }, pose(R, { arm: { rot: [[0, 0], [4, 90]] }, hand: { rot: [[0, 30]] } }))`;
+  const p = loadSource(src);
+  const svg = p.svg("a", 2);
+  // hand is drawn first (z 0) inside arm's transform (rotate 45 at frame 2 about 10,10), then its own
+  assert.match(svg, /translate\(10 10\) rotate\(45\) translate\(-10 -10\)"><g transform="translate\(10 20\) rotate\(30\) translate\(-10 -20\)"><circle/);
+  assert.ok(svg.indexOf("<circle") < svg.indexOf("<rect"), "hand (z 0) under arm (z 2)");
+  // frame 0: no rotation on the arm, so no wrapper for it
+  assert.doesNotMatch(p.svg("a", 0), /rotate\(0\)/);
+});
+
+test("rig: errors name the problem and suggest fixes", () => {
+  throwsMsg(() => loadSource(`rig({ a: { pivot: [0, 0], parent: "b" }, b: { pivot: [0, 0], parent: "a" } })`), /bone cycle/);
+  throwsMsg(() => loadSource(`rig({ arm: { pivot: [0, 0], parent: "torsso" }, torso: { pivot: [0, 0] } })`), /unknown parent 'torsso' \(did you mean 'torso'\?\)/);
+  throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { amr: { rot: [[0, 1]] } })`), /unknown bone 'amr' \(did you mean 'arm'\?\)/);
+  throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { arm: { rot: [[0, 1, "inOutt"], [2, 3]] } })`), /ease 'inOutt' \(did you mean 'inOut'\?\)/);
+  throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { arm: { rot: [[4, 1], [2, 3]] } })`), /key frames must increase/);
+  throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { arm: { spin: [[0, 1]] } })`), /unknown channel 'spin'/);
+});

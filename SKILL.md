@@ -72,6 +72,9 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Asset options**: `w, h` (required unless `base`), `outline` + `ow`, `mx`/`my` (mirror whole
   asset), `swap`, `flip`, `rot`, `bg`, `scale` (export px per unit). Order: items → mirror → swap →
   flip/rot → outline.
+- **Skeletal animation**: `rig({ bone: { parent, pivot: [x, y], z, items } })` + `pose(rig, clip)` where a clip is
+  `{ bone: { rot | move | scale: [[frame, value, ease?], ...] } }`. Check the anim preview strip frame by frame:
+  rotations add up along the chain (a held sword's angle is arm + forearm + sword), and a jump needs headroom.
 - **Animation**: `anim(name, { frames, fps }, ...)`; function items `(f) => items` get `f.i`, `f.n`,
   `f.t` (0..1, loops), `f.sin(amp, phase, cycles)`, `f.cos(...)`, `f.rng(seed)`. Stamping an anim
   inside an anim follows its frames (`delay` to desync, `frame` to freeze).

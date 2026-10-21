@@ -311,7 +311,6 @@ const smokeCurl = (x, y, f, len, phase, op) => {
 const GRADE = [
   // smoke from the ashtray and steam off the coffee
   (f) => [0, 0.33, 0.66].map((ph) => smokeCurl(362.6, 188, f, 60, ph, 1)),
-  (f) => [0, 0.5].map((ph) => smokeCurl(299, 180, f, 22, ph, 0.6)),
   // room haze: slow banks of smoke drifting left
   (f) => [[90, 120, 140], [300, 150, 120], [470, 110, 160], [200, 70, 100]].map(([x, y, rx], i) =>
     ellipse(((x - f.t * 40 * (i % 2 ? 1 : 0.6)) % 560) - 40, y, rx, rx * 0.35, { fill: "#6d7f88", opacity: 0.06, blur: 12 })),
@@ -345,7 +344,7 @@ const GRADE = [
   rect(0, 0, W, 15, "#000"), rect(0, H - 15, W, 15, "#000"),
 ]
 
-anim("cafe", { w: W, h: H, frames: 24, fps: 12, bg: "void" },
+anim("cafe_base", { w: W, h: H, frames: 24, fps: 12, bg: "void" },
   stamp("_wall", 0, 0),
   // water stains under the ceiling, cracks, a leaking pipe
   [[60, 40], [190, 30], [300, 54], [420, 36], [462, 70]].map(([x, h]) => ellipse(x, 6 + h / 2, 7, h, { fill: "#05070888", blur: 4 })),
@@ -400,19 +399,9 @@ anim("cafe", { w: W, h: H, frames: 24, fps: 12, bg: "void" },
   stamp("_table", 230, TABLE_Y),
   // far hand, resting flat and still
   rect(272, 186, 13, 6, { fill: lin(["mt3", "mt1"], 90), r: 2.5 }), [274, 277.5, 281].map((x) => rect(x, 190, 2.4, 3.4, { fill: "mt2", r: 1 })),
-  // near arm: upper arm down to the elbow on the table, forearm toward the mug
-  line([326, 146, 334, 186], { stroke: "ct1", sw: 13 }),
-  line([330, 150, 337, 184], { stroke: "ct0", sw: 4, opacity: 0.8 }),
-  line([334, 187, 312, 188], { stroke: "ct1", sw: 10 }),
-  line([334, 191, 313, 192], { stroke: "ct0", sw: 2.4, opacity: 0.8 }),
-  curve([322, 146, 328, 166, 331, 184], { stroke: "lp1", sw: 2.4, opacity: 0.3 }),
-  line([318, 183, 318, 193], { stroke: "ct0", sw: 1, opacity: 0.8 }),                   // cuff
   stamp("_ashtray", 346, TABLE_Y - 6),
   stamp("_papercup", 248, TABLE_Y - 7, { rot: -4 }),
   poly([352, 194, 362, 193, 364, 196, 354, 197], { fill: "#bfb6a0", opacity: 0.7 }),   // crumpled receipt
-  stamp("_mug", 292, TABLE_Y - 14),
-  rect(304, 183, 9, 8, { fill: lin(["mt3", "mt1"], 90), r: 3 }),
-  [184.5, 187.4, 190.3].map((y) => rect(298, y, 8, 2.2, { fill: lin(["mt2", "mt3"], 0), r: 1.1 })),
   poly([306, 82, 324, 82, 380, FLOOR, 250, FLOOR], { fill: lin(["lp2", "#00000000"], 90), opacity: 0.12, blur: 3 }),
   // foreground, out of focus: someone else's abandoned table
   tf({ blur: 3, opacity: 0.85 },
@@ -420,8 +409,49 @@ anim("cafe", { w: W, h: H, frames: 24, fps: 12, bg: "void" },
     rect(-34, 252, 148, 5, "mt0"),
     tf({ x: 52, y: 230, scale: 1.6 }, stamp("_mug", 0, 0)),
     tf({ x: 8, y: 240, scale: 1.5 }, stamp("_papercup", 0, 0)),
-    rect(-40, 220, 200, 50, { fill: "#05060a", opacity: 0.55 })),
-  ...GRADE)
+    rect(-40, 220, 200, 50, { fill: "#05060a", opacity: 0.55 })))
+
+anim("_grade", { w: W, h: H, frames: 24, fps: 12 }, ...GRADE)
+
+// ------------------------------------------------------------------ the arm, rigged
+
+// Shoulder -> elbow -> hand -> cup. Bones rotate about their pivots (scene coordinates);
+// the cup bone counter-rotates so the coffee stays level until he tilts it to drink.
+const SHOULDER = [326, 146], ELBOW = [334, 187], HAND = [306, 187]
+const beat = (f) => ({ ...f, i: f.i % 24, n: 24, t: (f.i % 24) / 24 })   // the scene's 2 s cycle inside longer clips
+const ARM = rig({
+  upper: { pivot: SHOULDER, z: 0, items: [
+    line([326, 146, 334, 186], { stroke: "ct1", sw: 13 }),
+    line([330, 150, 337, 184], { stroke: "ct0", sw: 4, opacity: 0.8 }),
+    curve([322, 146, 328, 166, 331, 184], { stroke: "lp1", sw: 2.4, opacity: 0.3 })] },
+  fore: { parent: "upper", pivot: ELBOW, z: 2, items: [
+    line([334, 187, 312, 188], { stroke: "ct1", sw: 10 }),
+    line([334, 191, 313, 192], { stroke: "ct0", sw: 2.4, opacity: 0.8 }),
+    line([318, 183, 318, 193], { stroke: "ct0", sw: 1, opacity: 0.8 }),                 // cuff
+    rect(304, 183, 9, 8, { fill: lin(["mt3", "mt1"], 90), r: 3 })] },
+  // the fingers wrap the mug, so they live on the cup bone and stay level with it
+  cup: { parent: "fore", pivot: HAND, z: 3, items: [
+    stamp("_mug", 292, TABLE_Y - 14),
+    [184.5, 187.4, 190.3].map((y) => rect(298, y, 8, 2.2, { fill: lin(["mt2", "mt3"], 0), r: 1.1 })),
+    (f) => [0, 0.5].map((ph) => smokeCurl(299, 180, beat(f), 22, ph, 0.6))] },
+})
+
+// 10 s at 12 fps: rest, a slow lift, a long sip, lower, rest. Keys ease in and out by default.
+const SIP = {
+  // elbow up and forward (75°), forearm folds (27°): the hand ends just under the jaw grille
+  upper: { rot: [[0, 0], [20, 0], [50, 75], [80, 75], [104, 0], [120, 0]] },
+  fore: { rot: [[0, 0], [20, 0], [50, 27], [58, 31], [72, 31], [80, 27], [104, 0], [120, 0]] },
+  // counter-rotate by upper + fore to stay level, then tip the rim toward his face to drink
+  cup: { rot: [[0, 0], [20, 0], [50, -102], [58, -126], [72, -126], [80, -102], [104, 0], [120, 0]] },
+}
+
+anim("cafe", { w: W, h: H, frames: 24, fps: 12 }, stamp("cafe_base", 0, 0), pose(ARM), stamp("_grade", 0, 0))
+
+// The long take: the room keeps its own 2 s rhythm (rain, flicker, grain) while he drinks.
+anim("last_cup_sip", { w: W, h: H, frames: 120, fps: 12 },
+  (f) => stamp("cafe_base", 0, 0, { frame: f.i % 24 }),
+  pose(ARM, SIP),
+  (f) => stamp("_grade", 0, 0, { frame: f.i % 24 }))
 
 // The film still: one frame of the loop, 4x = 1920x1080.
 scene("last_cup", { w: W, h: H, scale: 4 }, stamp("cafe", 0, 0, { frame: 0 }))

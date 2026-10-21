@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vex live</title>
+<style>
+  :root {
+    --bg: #14131b; --panel: #1c1a26; --panel2: #25222f; --line: #322d40; --text: #e8e4f0; --dim: #9a93ab;
+    --accent: #7cc7ff; --bad: #ff6b7a; --ok: #7bd88f; --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+  body { display: grid; grid-template: "head head head" 44px "list main side" 1fr / 230px 1fr 300px; }
+  header { grid-area: head; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .logo { font: 700 15px var(--mono); color: var(--accent); letter-spacing: 1px; }
+  .file { font-family: var(--mono); color: var(--dim); }
+  .grow { flex: 1; }
+  .pill { padding: 2px 9px; border-radius: 99px; font: 600 11px var(--mono); background: var(--panel2); color: var(--dim); }
+  .pill.ok { color: var(--ok); } .pill.bad { color: var(--bad); }
+  #list { grid-area: list; background: var(--panel); border-right: 1px solid var(--line); overflow: auto; padding: 6px; }
+  #filter { width: 100%; margin: 4px 0 6px; padding: 6px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 12px var(--mono); }
+  .sect { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 12px 6px 4px; }
+  .row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; position: relative; }
+  .row:hover { background: var(--panel2); } .row.sel { background: #2d3a52; }
+  .row img, .row .x { width: 34px; height: 34px; object-fit: contain; background: #0d0c12; border-radius: 4px; flex: none; }
+  .row .nm { font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .dot { position: absolute; right: 8px; width: 7px; height: 7px; border-radius: 9px; }
+  .dot.err { background: var(--bad); } .dot.new { background: var(--accent); animation: fade 2.5s forwards; }
+  @keyframes fade { to { opacity: 0; } }
+  main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #stage { flex: 1; position: relative; overflow: hidden; display: grid; place-items: center;
+    background: conic-gradient(#2a2733 25%, #222029 0 50%, #2a2733 0 75%, #222029 0) 0 0 / 24px 24px; }
+  #stage img { max-width: 92%; max-height: 92%; width: 92%; height: 92%; object-fit: contain; }
+  #err { position: absolute; left: 16px; right: 16px; bottom: 16px; display: none; padding: 12px 14px; border-radius: 8px;
+    background: #2b1720ee; border: 1px solid var(--bad); color: #ffd3d8; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+  #bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+  #bar button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: 12px var(--mono); }
+  #bar button:hover { border-color: var(--accent); }
+  #slider { flex: 1; accent-color: var(--accent); }
+  #info { padding: 6px 12px 9px; background: var(--panel); font: 12px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #info b { color: var(--text); }
+  #side { grid-area: side; background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  #side h3 { margin: 12px 12px 6px; font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
+  #steps { list-style: none; margin: 0; padding: 0 6px; overflow: auto; flex: 1; font: 11px var(--mono); }
+  #steps li { padding: 3px 6px; border-radius: 4px; cursor: pointer; display: flex; gap: 6px; }
+  #steps li:hover { background: var(--panel2); } #steps li.cur { background: #2d3a52; color: var(--accent); }
+  #steps .i { color: var(--dim); min-width: 26px; text-align: right; }
+  #steps .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  #pal { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 12px; }
+  #pal span { font: 10px var(--mono); display: flex; align-items: center; gap: 3px; color: var(--dim); }
+  #pal i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
+</style>
+</head>
+<body>
+<header><span class="logo">VEX</span><span class="file" id="file"></span><span class="grow"></span><span class="pill" id="status">connecting</span></header>
+<aside id="list"><input id="filter" placeholder="filter…"><div id="assets"></div></aside>
+<main>
+  <div id="stage"><img id="view" alt=""><div id="err"></div></div>
+  <div id="bar">
+    <button id="play">▶ steps</button><button id="anim">▶ anim</button>
+    <input type="range" id="slider" min="0" max="0" value="0">
+    <span id="count" class="file"></span>
+  </div>
+  <div id="info"></div>
+</main>
+<aside id="side"><h3>Steps</h3><ul id="steps"></ul><h3>Palette</h3><div id="pal"></div></aside>
+<script src="/app.js"></script>
+</body>
+</html>

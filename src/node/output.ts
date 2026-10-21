@@ -6,6 +6,7 @@ import type { Project } from "../core/project.ts";
 import { type Box, innerOf } from "../core/svg.ts";
 import { n } from "../core/util.ts";
 import { outlineText, png, previewSvg } from "./raster.ts";
+import { writeSpine } from "./spine.ts";
 
 export interface OutputOptions {
   /** Only these assets/sheets (default: everything exported). */
@@ -83,7 +84,7 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
   const sheetNames = new Set(p.sheets.map((s) => s.name));
   if (opts.only)
     for (const x of opts.only)
-      if (!p.assets.has(x) && !sheetNames.has(x))
+      if (!p.assets.has(x) && !sheetNames.has(x) && !p.spines.some((sp) => sp.name === x))
         errors.push(new VexError(`unknown asset or sheet '${x}'${didYouMean(x, [...p.order, ...sheetNames])}`));
   const want = opts.only ? new Set(opts.only) : undefined;
   const names = want ? p.order.filter((x) => want.has(x)) : p.exported();
@@ -121,6 +122,11 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
     } catch (e) {
       errors.push(wrap(e));
     }
+  }
+
+  for (const sp of p.spines) {
+    if (want && !want.has(sp.name)) continue;
+    try { lines.push(writeSpine(p, sp, out)); } catch (e) { errors.push(wrap(e).within(`spine '${sp.name}'`, sp.loc)); }
   }
 
   for (const s of p.sheets) {

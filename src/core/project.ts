@@ -1,7 +1,7 @@
 // Project: the registry an art file fills in (the DSL), plus the lazy, cached, cycle-checked
 // builder that turns definitions into resolved node trees.
 import { VexError, didYouMean, wrap } from "./errors.ts";
-import { checkClip, isRig, makeRig, sample } from "./rig.ts";
+import { type Clip, type Rig, checkClip, isRig, makeRig, sample } from "./rig.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
   type AssetDef, type AssetKind, type AssetOpts, type FrameInfo, type GroupDef, type Grad, type Item, type Node,
@@ -129,6 +129,7 @@ export class Project {
   readonly order: string[] = [];
   readonly groups = new Map<string, GroupDef>();
   readonly sheets: SheetDef[] = [];
+  readonly spines: SpineDef[] = [];
   /** Art files loaded so far (absolute paths or virtual names), for locations and watching. */
   readonly files: string[] = [];
   pal: Palette = Palette.builtin("sweetie16");
@@ -311,6 +312,29 @@ export class Project {
       return { __ref: "clip", args: [mask, ...items], step: { label: "clip(…)", loc } };
     });
     env.rig = (spec: unknown) => at("rig", () => makeRig(spec));
+    // Spine export: each bone's art becomes a hidden part sprite (rest pose, full asset box).
+    env.spine = (name: unknown, rg: unknown, o: unknown) => at("spine", (loc) => {
+      if (typeof name !== "string" || !name) throw new VexError('spine("name", rig, { w, h, scale, outline, clips: { walk: { clip, frames, fps } } })');
+      if (!isRig(rg)) throw new VexError("spine: the second argument must come from rig({ ... })");
+      if (!isPlain(o)) throw new VexError("spine options must be an object");
+      checkKeys(`spine '${name}'`, o, ["w", "h", "scale", "outline", "ow", "clips", "origin"]);
+      if (!(typeof o.w === "number" && typeof o.h === "number")) throw new VexError(`spine '${name}' needs { w, h }: the rig's asset box`);
+      const clips = (o.clips ?? {}) as Record<string, unknown>;
+      if (!isPlain(clips)) throw new VexError("spine clips: { name: { clip, frames, fps } }");
+      const parsed: SpineDef["clips"] = {};
+      for (const [cn, c] of Object.entries(clips)) {
+        if (!isPlain(c) || !(typeof c.frames === "number" && c.frames >= 1)) throw new VexError(`spine clip '${cn}': { clip, frames, fps }`);
+        parsed[cn] = { clip: checkClip(rg, c.clip ?? {}), frames: c.frames, fps: Number(c.fps ?? 12) };
+      }
+      const parts: string[] = [];
+      for (const [bone, b] of rg.bones) {
+        if (!b.items.length) continue;
+        const asset = `_spine_${name}_${bone}`;
+        (env.sprite as (...a: unknown[]) => void)(asset, { w: o.w, h: o.h, ...(o.outline ? { outline: o.outline, ow: o.ow ?? 1.5 } : {}) }, ...b.items);
+        parts.push(bone);
+      }
+      this.spines.push({ name, rig: rg, w: o.w, h: o.h, scale: Number(o.scale ?? 1), clips: parsed, parts, origin: (o.origin as [number, number]) ?? [o.w / 2, o.h], loc });
+    });
     env.pose = (rg: unknown, clip: unknown = {}) => at("pose", () => {
       if (!isRig(rg)) throw new VexError("pose(rig, clip): the first argument must come from rig({ ... })");
       const c = checkClip(rg, clip);
@@ -570,6 +594,21 @@ function stepOf(item: unknown, def: AssetDef): Step {
   if (typeof item === "function") return { label: "ƒ(f)", loc: def.loc };
   if (Array.isArray(item)) return { label: `[${item.length} items]`, loc: def.loc };
   return { label: "item", loc: def.loc };
+}
+
+export interface SpineDef {
+  name: string;
+  rig: Rig;
+  w: number;
+  h: number;
+  /** Export pixels per unit. */
+  scale: number;
+  clips: Record<string, { clip: Clip; frames: number; fps: number }>;
+  /** Bones that draw something. */
+  parts: string[];
+  /** Skeleton origin in asset units (default: bottom center). */
+  origin: [number, number];
+  loc?: string;
 }
 
 export function idPrefix(name: string, frame: number): string {

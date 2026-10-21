@@ -49,6 +49,9 @@ anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, {
 }))
 ```
 
+The same rig exports to **Spine 4.1** (`spine("hero", HERO, { clips })`): a skeleton JSON plus an atlas,
+checked in the official Spine web player, so the animations run in any engine with a Spine runtime.
+
 The same rig drives the LAST CUP robot's arm: ▶ **[watch him drink, 10 s with sound](docs/media/last_cup_sip.mp4)**.
 A shoulder, elbow, hand and cup chain lifts the mug to his jaw while the cup bone counter-rotates
 to keep the coffee level, and the room keeps its own 2 s rhythm of rain, flicker and grain.
@@ -105,7 +108,7 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.
 - **Skeletal animation:** `rig()` bone hierarchies with pivots and draw order, `pose()` with keyframed
-  rotation, offset and scale clips, five easings, procedural channels.
+  rotation, offset and scale clips, five easings, procedural channels, and Spine 4.1 export.
 - **Animation:** `(f) => items` functions per frame (`f.t`, `f.sin`, `f.cos`, `f.rng`). Anims
   stamped inside anims follow their frames.
 - **Output:** SVG, PNG at any scale, animation strips, atlases + JSON for Phaser, PixiJS, Godot

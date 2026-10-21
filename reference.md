@@ -140,6 +140,19 @@ anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, WALK))
 equal the first. Stamped anims follow their parent's progress; to keep a short cycle at its own speed
 inside a longer clip, stamp it with an explicit frame: `(f) => stamp("cycle", 0, 0, { frame: f.i % 24 })`.
 
+## Spine export
+
+```js
+spine("hero", HERO, { w: 48, h: 64, scale: 4, outline: "k", clips: {
+  walk: { clip: WALK, frames: 8, fps: 10 }, run: { clip: RUN, frames: 8, fps: 14 } } })
+```
+
+Writes `out/spine/hero.json` (Spine 4.1 skeleton), `hero.atlas` + `hero.png` (one trimmed image per
+bone), and `hero.html`, a preview of every clip in the official Spine web player (serve the folder
+over HTTP). Bones keep their pivots and parents; slots follow `z`; clips are baked to one linear key
+per frame, so every easing and procedural channel comes out exactly. `outline` outlines each part
+separately (cutout style). The skeleton origin is the bottom center of `w × h` (change with `origin`).
+
 ## Output
 
 `vex build art.vx.js [--out DIR] [--only a,b] [--scales 1,2] [--no-preview] [--no-grid]`

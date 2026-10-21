@@ -178,3 +178,29 @@ sprite("b", { w: 200, h: 100 }, circle(180, 80, 6, { fill: "1", blur: 3 }), rect
   assert.equal(png.readUInt32BE(16), 40);
   assert.equal(png.readUInt32BE(20), 40);
 });
+
+test("spine export: bones in y-up pixels, slots in draw order, clips baked per frame, atlas regions", async () => {
+  const { writeSpine } = await import("../src/node/spine.ts");
+  const p = loadSource(`const R = rig({
+  body: { pivot: [10, 20], z: 1, items: [rect(5, 10, 10, 10, "1")] },
+  arm: { parent: "body", pivot: [14, 12], z: 0, items: [rect(13, 12, 2, 8, "2")] },
+})
+spine("bot", R, { w: 20, h: 20, scale: 2, clips: { wave: { clip: { arm: { rot: [[0, 0, "linear"], [4, 90]] } }, frames: 4, fps: 8 } } })`);
+  const dir = mkdtempSync(join(tmpdir(), "vex-"));
+  try {
+    writeSpine(p, p.spines[0], dir);
+    const j = JSON.parse(readFileSync(join(dir, "spine/bot.json"), "utf8"));
+    assert.match(j.skeleton.spine, /^4\.1\./);
+    // origin is bottom center (10, 20): body pivot (10, 20) -> (0, 0); arm (14, 12) relative to body -> (4, 8) * scale
+    assert.deepEqual(j.bones.map((b: { name: string; x?: number; y?: number }) => [b.name, b.x ?? 0, b.y ?? 0]), [["root", 0, 0], ["body", 0, 0], ["arm", 8, 16]]);
+    assert.deepEqual(j.slots.map((s: { name: string }) => s.name), ["arm", "body"]);
+    const rot = j.animations.wave.bones.arm.rotate;
+    assert.equal(rot.length, 5);
+    assert.deepEqual(rot[2], { time: 0.25, value: -45 });      // clockwise in vex -> counter-clockwise in Spine
+    const atlas = readFileSync(join(dir, "spine/bot.atlas"), "utf8");
+    assert.match(atlas, /^bot\.png\nsize:\d+,\d+\nfilter:Linear,Linear\n/);
+    assert.match(atlas, /\narm\nbounds:\d+,\d+,6,17\n/);       // 2x8 units at scale 2 + 1 px margin (clipped at the box edge below)
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -75,6 +75,8 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Skeletal animation**: `rig({ bone: { parent, pivot: [x, y], z, items } })` + `pose(rig, clip)` where a clip is
   `{ bone: { rot | move | scale: [[frame, value, ease?], ...] } }`. Check the anim preview strip frame by frame:
   rotations add up along the chain (a held sword's angle is arm + forearm + sword), and a jump needs headroom.
+- **Spine**: `spine(name, rig, { w, h, scale, outline, clips: { walk: { clip, frames, fps } } })` writes a Spine 4.1
+  skeleton + atlas for game runtimes; check it in `out/spine/<name>.html` (served over HTTP).
 - **Animation**: `anim(name, { frames, fps }, ...)`; function items `(f) => items` get `f.i`, `f.n`,
   `f.t` (0..1, loops), `f.sin(amp, phase, cycles)`, `f.cos(...)`, `f.rng(seed)`. Stamping an anim
   inside an anim follows its frames (`delay` to desync, `frame` to freeze).

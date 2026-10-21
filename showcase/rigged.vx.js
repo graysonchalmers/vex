@@ -120,3 +120,8 @@ anim("rig_showreel", { w: 290, h: 96, frames: 120, fps: 24, scale: 3, bg: "#2320
   CLIPS.map(([name], i) => text(30 + i * 56, 91, name.slice(5).toUpperCase(), { fill: "#9a93ab", size: 6, anchor: "middle", weight: "bold", font: "DejaVu Sans" })))
 
 sheet("hero_rigged", ["hero_idle", "hero_walk", "hero_run", "hero_jump", "hero_attack"], { pad: 2, scale: 2 })
+
+// Spine export: the same rig and clips as a Spine 4.1 skeleton + atlas (out/spine/).
+spine("hero", HERO, { w: 48, h: 64, scale: 4, outline: "k", ow: 1.2, clips: {
+  idle: { clip: IDLE, frames: 12, fps: 8 }, walk: { clip: WALK, frames: 8, fps: 10 }, run: { clip: RUN, frames: 8, fps: 14 },
+  jump: { clip: JUMP, frames: 12, fps: 14 }, attack: { clip: ATTACK, frames: 10, fps: 16 } } })

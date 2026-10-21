@@ -7,8 +7,7 @@ A live viewer rebuilds on save and replays each asset step by step.
 
 Built for AI agents (it ships as a Claude Code skill) and just as usable by hand.
 
-> Part of a family: **vex** (vector art), [**chirp**](https://github.com/uilianks/chirp) (game audio) and
-> [**kiln**](https://github.com/uilianks/kiln) (low-poly and voxel 3D).
+> Part of a family: **vex** (vector art), [**pxl**](https://github.com/uilianks/pxl) (pixel art), [**chirp**](https://github.com/uilianks/chirp) (game audio), [**kiln**](https://github.com/uilianks/kiln) (low-poly and voxel 3D) and [**loom**](https://github.com/uilianks/loom) (seamless textures and PBR materials).
 >
 > Inspired by [**claude-pxl**](https://github.com/crsolver/claude-pxl) by crsolver, a pixel-art
 > DSL for agents. vex takes its architecture (sandboxed art files, lazy cached builds, located

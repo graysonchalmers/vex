@@ -5,7 +5,7 @@ import { VexError, didYouMean, wrap } from "../core/errors.ts";
 import type { Project } from "../core/project.ts";
 import { type Box, innerOf } from "../core/svg.ts";
 import { n } from "../core/util.ts";
-import { png, previewSvg } from "./raster.ts";
+import { outlineText, png, previewSvg } from "./raster.ts";
 
 export interface OutputOptions {
   /** Only these assets/sheets (default: everything exported). */
@@ -95,7 +95,7 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
       const dir = join(out, `${def.kind}s`);
       if (b.frames === 1) {
         const svg = p.svg(name, 0, 1);
-        write(join(dir, name + ".svg"), svg);
+        write(join(dir, name + ".svg"), outlineText(svg));
         for (const m of scales) write(join(dir, name + suffix(m) + ".png"), png(p.svg(name, 0, b.scale * m)));
         if (opts.preview !== false) write(join(out, "_preview", name + ".png"), png(previewSvg(svg, b.box, { grid: opts.grid })));
         lines.push(`${def.kind} ${name} ${n(b.box.w * b.scale)}x${n(b.box.h * b.scale)}`);
@@ -103,7 +103,7 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
         const ms = Math.round(1000 / b.fps);
         const cells: Cell[] = Array.from({ length: b.frames }, (_, i) => {
           const svg = p.svg(name, i, 1);
-          write(join(dir, name, `${i}.svg`), svg);
+          write(join(dir, name, `${i}.svg`), outlineText(svg));
           return { name: `${name}_${i}`, svg, box: p.build(name, i).box, ms };
         });
         for (const m of scales) {

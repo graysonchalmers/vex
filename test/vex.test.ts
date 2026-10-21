@@ -165,3 +165,16 @@ test("rig: errors name the problem and suggest fixes", () => {
   throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { arm: { rot: [[4, 1], [2, 3]] } })`), /key frames must increase/);
   throwsMsg(() => loadSource(`pose(rig({ arm: { pivot: [0, 0] } }), { arm: { spin: [[0, 1]] } })`), /unknown channel 'spin'/);
 });
+
+test("exported SVGs draw text as outlines; crops never touch the SVG", async () => {
+  const { outlineText, pngCrop } = await import("../src/node/raster.ts");
+  const p = loadSource(`sprite("t", { w: 60, h: 20 }, text(4, 15, "HI", { fill: "1", size: 12 }))
+sprite("b", { w: 200, h: 100 }, circle(180, 80, 6, { fill: "1", blur: 3 }), rect(0, 0, 20, 20, "2"))`);
+  const out = outlineText(p.svg("t"));
+  assert.doesNotMatch(out, /<text/);
+  assert.match(out, /<path/);
+  // The blurred circle lies entirely outside the crop: the case that used to abort resvg.
+  const png = pngCrop(p.svg("b", 0, 2), 2, { x: 0, y: 0, w: 20, h: 20 });
+  assert.equal(png.readUInt32BE(16), 40);
+  assert.equal(png.readUInt32BE(20), 40);
+});

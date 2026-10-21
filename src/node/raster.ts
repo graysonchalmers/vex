@@ -1,5 +1,8 @@
 // SVG -> PNG with resvg, so every PNG is a rendering of the exact SVG that is exported.
+import { deflateSync } from "node:zlib";
 import { Resvg } from "@resvg/resvg-js";
+import { VexError } from "../core/errors.ts";
+import { png as encodePng } from "../core/png.ts";
 import { innerOf } from "../core/svg.ts";
 import { n } from "../core/util.ts";
 
@@ -8,6 +11,30 @@ export function png(svg: string): Buffer {
   // Font discovery is slow; only pay for it when there is text.
   const r = new Resvg(svg, { font: { loadSystemFonts: svg.includes("<text") }, shapeRendering: 2 });
   return r.render().asPng();
+}
+
+/**
+ * Text drawn as outlines, so an exported SVG looks the same on machines without the font.
+ * resvg lays the text out with system fonts and returns the simplified document.
+ */
+export function outlineText(svg: string): string {
+  if (!svg.includes("<text")) return svg;
+  return new Resvg(svg, { font: { loadSystemFonts: true } }).toString();
+}
+
+/**
+ * Render, then crop in pixel space. (Cropping through the viewBox can crash resvg when a
+ * blurred element ends up entirely outside it, so the crop never touches the SVG.)
+ */
+export function pngCrop(svg: string, scale: number, crop?: { x: number; y: number; w: number; h: number }, origin = { x: 0, y: 0 }): Buffer {
+  const r = new Resvg(svg, { font: { loadSystemFonts: svg.includes("<text") }, shapeRendering: 2 }).render();
+  if (!crop) return r.asPng();
+  const x0 = Math.max(0, Math.round((crop.x - origin.x) * scale)), y0 = Math.max(0, Math.round((crop.y - origin.y) * scale));
+  const w = Math.min(r.width - x0, Math.round(crop.w * scale)), h = Math.min(r.height - y0, Math.round(crop.h * scale));
+  if (!(w > 0 && h > 0)) throw new VexError(`crop ${crop.x},${crop.y},${crop.w},${crop.h} is outside the image`);
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) out.set(r.pixels.subarray(((y0 + y) * r.width + x0) * 4, ((y0 + y) * r.width + x0 + w) * 4), y * w * 4);
+  return Buffer.from(encodePng(w, h, out, (b) => deflateSync(b)));
 }
 
 export interface PreviewOpts {

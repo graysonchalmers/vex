@@ -1,5 +1,7 @@
 // vex command line.
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { pngCrop } from "./raster.ts";
 import { VexError, wrap } from "../core/errors.ts";
 import { loadProject } from "./load.ts";
 import { writeOutputs } from "./output.ts";
@@ -14,6 +16,8 @@ const USAGE = `vex — 2D vector game-asset DSL
       Live viewer: rebuilds on save and replays each asset's drawing steps.
   vex svg   <art.vx.js> <name> [--frame N]
       Print an asset's SVG (exact geometry, cheap to read).
+  vex frame <art.vx.js> <name> [--frame N] [--scale S] [--crop x,y,w,h] [--out FILE.png]
+      Render one frame to PNG; --crop (asset units) cuts out a close-up in pixel space.
   vex list  <art.vx.js>
       List assets, groups and sheets with their source locations.
 
@@ -30,6 +34,8 @@ interface Args {
   grid?: boolean;
   port?: number;
   frame?: number;
+  scale?: number;
+  crop?: { x: number; y: number; w: number; h: number };
 }
 
 function parse(argv: string[]): Args {
@@ -52,6 +58,12 @@ function parse(argv: string[]): Args {
     else if (v === "--scales") a.scales = val().split(",").map(num);
     else if (v === "--port") a.port = num(val());
     else if (v === "--frame") a.frame = Number(val());
+    else if (v === "--scale") a.scale = num(val());
+    else if (v === "--crop") {
+      const c = val().split(",").map(Number);
+      if (c.length !== 4 || c.some((x) => !Number.isFinite(x)) || !(c[2] > 0 && c[3] > 0)) throw new VexError("--crop must be x,y,w,h in asset units");
+      a.crop = { x: c[0], y: c[1], w: c[2], h: c[3] };
+    }
     else if (v === "--no-preview") a.preview = false;
     else if (v === "--no-grid") a.grid = false;
     else if (v === "-h" || v === "--help") a.cmd = "help";
@@ -86,6 +98,17 @@ export async function main(argv: string[]): Promise<number> {
         const name = a.rest[0];
         if (!name) throw new VexError("svg needs an asset name: vex svg <file> <name>");
         console.log(loadProject(file).svg(name, a.frame ?? 0, 1));
+        return 0;
+      }
+      case "frame": {
+        const name = a.rest[0];
+        if (!name) throw new VexError("frame needs an asset name: vex frame <file> <name>");
+        const p = loadProject(file);
+        const b = p.build(name, a.frame ?? 0), s = a.scale ?? b.scale;
+        const out = typeof a.out === "string" ? resolve(a.out) : join(outDir, "frames", `${name}_${b.frame}.png`);
+        mkdirSync(dirname(out), { recursive: true });
+        writeFileSync(out, pngCrop(p.svg(name, a.frame ?? 0, s), s, a.crop, b.box));
+        console.log(`frame ${name} #${b.frame} -> ${out}`);
         return 0;
       }
       case "list": {

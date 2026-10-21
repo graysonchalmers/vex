@@ -1,0 +1,9 @@
+vex
+Copyright (c) 2026 uilianks
+
+vex is inspired by claude-pxl (https://github.com/crsolver/claude-pxl),
+Copyright (c) 2026 crsolver, released under the MIT License.
+
+Portions of vex (the art-file sandbox loader, error formatting, CLI and
+live-viewer server structure) are adapted from claude-pxl. They are
+distributed under the same MIT License; see LICENSE.

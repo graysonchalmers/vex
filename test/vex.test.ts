@@ -236,3 +236,21 @@ level("lv", { tileset: "ts", legend: { "#": platformer({ top: "top", topL: "topL
   throwsMsg(() => loadSource(src.replace("..c..", "..x..")), /map row 1, column 3: 'x' is not in the legend/);
   throwsMsg(() => loadSource(src.replace('tileset: "ts"', 'tileset: "tz"')), /unknown tileset 'tz' \(did you mean 'ts'\?\)/);
 });
+
+test("particles: deterministic, seamless loops, bursts start on time", async () => {
+  const { simulate } = await import("../src/core/vfx.ts");
+  const fi = (i: number, n: number) => ({ i, n, t: i / n, sin: () => 0, cos: () => 0, rng: () => () => 0 });
+  const loop = { at: [0, 0] as [number, number], rate: 2, life: 10 as number, speed: 1 };
+  // looping: frame 0 already shows particles from the previous cycle, and frame n would equal frame 0
+  assert.ok(simulate(loop, fi(0, 24)).length >= 18);
+  assert.deepEqual(simulate(loop, fi(5, 24)), simulate(loop, fi(5, 24)));
+  const a = simulate(loop, fi(3, 24)).map((p) => [p.x, p.y]).sort(), b = simulate(loop, fi(27, 24)).map((p) => [p.x, p.y]).sort();
+  assert.deepEqual(a, b);
+  const burst = { at: [0, 0] as [number, number], burst: 5, start: 4, life: 6 as number, speed: 1, angle: 0 };
+  assert.equal(simulate(burst, fi(3, 20)).length, 0);
+  assert.equal(simulate(burst, fi(4, 20)).length, 5);
+  assert.equal(simulate(burst, fi(11, 20)).length, 0);
+  assert.ok(Math.abs(simulate(burst, fi(6, 20))[0].x - 2) < 1e-9);   // 2 frames at speed 1 along angle 0
+  throwsMsg(() => loadSource(`particles({ at: [0, 0], rate: 1, shpe: "spark" })`), /unknown option 'shpe' \(did you mean 'shape'\?\)/);
+  throwsMsg(() => loadSource(`particles({ at: [0, 0] })`), /needs a rate .* or a burst/);
+});

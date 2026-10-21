@@ -2,6 +2,7 @@
 // builder that turns definitions into resolved node trees.
 import { VexError, didYouMean, wrap } from "./errors.ts";
 import { type Clip, type Rig, checkClip, isRig, makeRig, sample } from "./rig.ts";
+import { checkParticles, simulate } from "./vfx.ts";
 import { type LegendEntry, type LevelGrid, buildGrid, parseMap, platformer } from "./level.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
@@ -315,6 +316,31 @@ export class Project {
       return { __ref: "clip", args: [mask, ...items], step: { label: "clip(…)", loc } };
     });
     env.rig = (spec: unknown) => at("rig", () => makeRig(spec));
+    env.particles = (o: unknown) => at("particles", () => {
+      if (!isPlain(o)) throw new VexError("particles({ at | area, rate | burst, life, speed, angle, gravity, size, color, opacity, shape })");
+      const po = checkParticles(o);
+      for (const c of po.color ?? []) this.pal.resolve(c);
+      const E = env as Record<string, (...a: unknown[]) => unknown>;
+      return (f: FrameInfo) => simulate(po, f).filter((q) => q.size > 0.05 && q.opacity > 0.01).map((q) => {
+        const st: Record<string, unknown> = { opacity: Math.min(1, q.opacity) };
+        if (po.glow) st.glow = po.glow;
+        if (po.blend) st.blend = po.blend;
+        if (po.sprite) {
+          const b = this.build(po.sprite);
+          return E.stamp(po.sprite, q.x, q.y, { anchor: "center", scale: q.size / b.w, rot: q.rot, opacity: Math.min(1, q.opacity) });
+        }
+        switch (po.shape ?? "circle") {
+          case "spark": {
+            const len = Math.max(q.size, Math.hypot(q.vx, q.vy) * 2.2), m = Math.hypot(q.vx, q.vy) || 1;
+            return E.line([q.x - (q.vx / m) * len, q.y - (q.vy / m) * len, q.x, q.y], { stroke: q.color, sw: Math.max(0.3, q.size * 0.45), ...st });
+          }
+          case "square": return E.tf({ x: q.x, y: q.y, rot: q.rot }, E.rect(-q.size / 2, -q.size / 2, q.size, q.size, { fill: q.color, ...st }));
+          case "star": return E.star(q.x, q.y, 4, q.size, q.size * 0.35, { fill: q.color, rot: q.rot, ...st });
+          case "ring": return E.circle(q.x, q.y, q.size, { stroke: q.color, sw: Math.max(0.4, q.size * 0.12), ...st });
+          default: return E.circle(q.x, q.y, q.size / 2, { fill: q.color, ...st });
+        }
+      });
+    });
     env.platformer = (keys: unknown) => at("platformer", () => {
       const need = ["top", "topL", "topR", "fill", "fillL", "fillR"];
       if (!isPlain(keys) || !need.every((k) => typeof keys[k] === "string")) throw new VexError(`platformer({ ${need.join(", ")} }): tile keys from the tileset`);

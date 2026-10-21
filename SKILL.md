@@ -75,6 +75,8 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Skeletal animation**: `rig({ bone: { parent, pivot: [x, y], z, items } })` + `pose(rig, clip)` where a clip is
   `{ bone: { rot | move | scale: [[frame, value, ease?], ...] } }`. Check the anim preview strip frame by frame:
   rotations add up along the chain (a held sword's angle is arm + forearm + sword), and a jump needs headroom.
+- **Particles**: `particles({ at | area, rate | burst, life, speed, angle, gravity, drag, size, color, opacity, shape, glow })`
+  inside an anim. Draw smoke before fire, check the strip on a dark stage too (light colors vanish on the checkerboard).
 - **Levels**: `tileset(name, { size, tiles })` + `level(name, { tileset, legend, map })`. Legend chars are tile keys,
   autotile rules (`platformer({...})` or `(n) => key`) or `{ object, type, props }`; maps can be generated `(rng) => rows`.
   Exports Tiled .tmj/.tmx; check `out/levels/<name>.html` and that objects stand on ground, not one row above it.

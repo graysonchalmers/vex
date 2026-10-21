@@ -140,6 +140,30 @@ anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, WALK))
 equal the first. Stamped anims follow their parent's progress; to keep a short cycle at its own speed
 inside a longer clip, stamp it with an explicit frame: `(f) => stamp("cycle", 0, 0, { frame: f.i % 24 })`.
 
+## Particles (VFX)
+
+```js
+anim("fx_fire", { w: 48, h: 64, frames: 24, fps: 16 },
+  particles({ area: [19, 50, 10, 4], rate: 3, life: [10, 15], speed: [1, 1.6], angle: [-104, -76], gravity: [0, -0.05],
+    size: [[5, 7], 0.5], color: ["fi3", "fi2", "fi1", "fi0"], opacity: [0.9, 0.3], glow: 1.5, blend: "screen" }))
+anim("fx_boom", { w: 96, h: 96, frames: 30, fps: 24 },
+  particles({ at: [48, 50], burst: 30, life: [9, 18], speed: [1.4, 3.2], angle: [0, 360], drag: 0.13, size: [[12, 18], 3], color: [...] }))
+```
+
+| Option | Meaning |
+|---|---|
+| `at` / `area` | Spawn point `[x, y]` or area `[x, y, w, h]`. |
+| `rate` / `burst` + `start` | Particles per frame (looping: frame 0 already holds particles from the previous cycle, so loops are seamless), or a one-shot count on frame `start`. |
+| `life`, `speed`, `angle` | Frames; units per frame; degrees (0 = right, -90 = up). Numbers or `[min, max]`. |
+| `gravity`, `drag` | Added to velocity per frame; velocity fraction lost per frame. |
+| `size` | `[start, end]` over life (each a number or range): the diameter (radius for `ring`). |
+| `color`, `opacity` | Colors spread from birth to death; `[start, end]` opacity. |
+| `shape` | `circle` (default), `spark` (stretched along velocity), `square`, `star`, `ring`; or `sprite: "name"`. |
+| `spin`, `glow`, `blend`, `seed`, `loop` | Rotation per frame; halo; blend mode; variation; override looping. |
+
+Particles are recomputed from their seed for every frame, so any frame renders on its own and
+builds repeat exactly. Effects are ordinary anims: strips, atlases + JSON, GIF previews.
+
 ## Levels and tilemaps
 
 ```js

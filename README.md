@@ -56,6 +56,14 @@ The same rig drives the LAST CUP robot's arm: ▶ **[watch him drink, 10 s with 
 A shoulder, elbow, hand and cup chain lifts the mug to his jaw while the cup bone counter-rotates
 to keep the coffee level, and the room keeps its own 2 s rhythm of rain, flicker and grain.
 
+### Visual effects
+
+![Fire, magic, smoke, explosion, hit and dust](docs/media/vfx_showreel.gif)
+
+A deterministic particle system: spawn rates or bursts, life, speed, angle, gravity, drag, size, color and
+opacity over life, sparks stretched along their velocity, glow and blend modes. Loops are seamless.
+Source: [`vfx.vx.js`](showcase/vfx.vx.js)
+
 ### Levels
 
 ![A hand-made level](docs/media/level_stage1.png)
@@ -123,6 +131,8 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
 - **Structure:** `tf` transform groups, `sym` mirroring, `clip` for cel shading and highlights,
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.
+- **Particles:** `particles()` for fire, smoke, explosions, magic, hits and dust, as looping or one-shot anims.
+- **Levels:** `tileset()` + `level()` with autotiling, game objects and generated maps; Tiled .tmj / .tmx export.
 - **Skeletal animation:** `rig()` bone hierarchies with pivots and draw order, `pose()` with keyframed
   rotation, offset and scale clips, five easings, procedural channels, and Spine 4.1 export.
 - **Animation:** `(f) => items` functions per frame (`f.t`, `f.sin`, `f.cos`, `f.rng`). Anims

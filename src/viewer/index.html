@@ -50,13 +50,29 @@
   #pal { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 12px; }
   #pal span { font: 10px var(--mono); display: flex; align-items: center; gap: 3px; color: var(--dim); }
   #pal i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
+  #ann { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  body.annotating #ann { pointer-events: auto; cursor: crosshair; }
+  header button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; font: 12px var(--mono); }
+  header button.on { color: var(--accent); border-color: var(--accent); }
+  #annot { display: none; padding: 0 12px 12px; border-bottom: 1px solid var(--line); }
+  body.annotating #annot { display: block; }
+  #annot .row2 { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 8px; }
+  #annot button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; font: 11px var(--mono); }
+  #annot button.on { border-color: var(--accent); color: var(--accent); }
+  #annot .chip { width: 22px; height: 22px; padding: 0; }
+  #annot textarea { width: 100%; min-height: 54px; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font: 12px var(--mono); padding: 6px; }
+  #notes { list-style: none; margin: 0 0 8px; padding: 0; font: 11px var(--mono); max-height: 120px; overflow: auto; }
+  #notes li { display: flex; gap: 6px; padding: 2px 0; } #notes b { color: #ffb454; } #notes span { flex: 1; } #notes a { color: var(--bad); cursor: pointer; }
+  #send { width: 100%; margin-top: 6px; border-color: var(--accent) !important; color: var(--accent) !important; font-weight: 700; }
+  #fbstatus { font: 11px var(--mono); color: var(--dim); margin-top: 6px; min-height: 15px; }
+  #pal span { cursor: pointer; }
 </style>
 </head>
 <body>
-<header><span class="logo">VEX</span><span class="file" id="file"></span><span class="grow"></span><span class="pill" id="status">connecting</span></header>
+<header><span class="logo">VEX</span><span class="file" id="file"></span><span class="grow"></span><button id="annotbtn" title="draw marks and pin notes for Claude (a)">✎ annotate</button><span class="pill" id="status">connecting</span></header>
 <aside id="list"><input id="filter" placeholder="filter…"><div id="assets"></div></aside>
 <main>
-  <div id="stage"><img id="view" alt=""><div id="err"></div></div>
+  <div id="stage"><img id="view" alt=""><canvas id="ann"></canvas><div id="err"></div></div>
   <div id="bar">
     <button id="play">▶ steps</button><button id="anim">▶ anim</button>
     <input type="range" id="slider" min="0" max="0" value="0">
@@ -64,7 +80,18 @@
   </div>
   <div id="info"></div>
 </main>
-<aside id="side"><h3>Steps</h3><ul id="steps"></ul><h3>Palette</h3><div id="pal"></div></aside>
+<aside id="side">
+  <div id="annot">
+    <h3 style="margin-left:0">Feedback for Claude</h3>
+    <div class="row2"><button id="t-pen" class="on" title="draw (b)">pen</button><button id="t-note" title="pin a note (n)">note</button><button id="t-erase" title="erase a stroke (e) — or right-click">erase</button><button id="t-size">thin</button><button id="t-clear">clear</button></div>
+    <div class="row2" id="colors"></div>
+    <div style="font:10px var(--mono);color:var(--dim);margin-bottom:6px">markup colors point at things; click a palette swatch to draw "make it this color"</div>
+    <ol id="notes"></ol>
+    <textarea id="comment" placeholder="overall comment…"></textarea>
+    <button id="send">send to Claude</button>
+    <div id="fbstatus"></div>
+  </div>
+  <h3>Steps</h3><ul id="steps"></ul><h3>Palette</h3><div id="pal"></div></aside>
 <script src="/app.js"></script>
 </body>
 </html>

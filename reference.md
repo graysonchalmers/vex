@@ -234,3 +234,10 @@ separately (cutout style). The skeleton origin is the bottom center of `w × h` 
 
 `vex svg art.vx.js <name> [--frame N]` prints one SVG. `vex list art.vx.js` lists assets.
 `vex serve art.vx.js [--port 4322] [--no-out]` runs the live viewer.
+
+**Annotate mode** (`✎ annotate` or `a` in the viewer): pen strokes (markup colors, or click a palette
+swatch to draw "make it this color"), numbered notes, erase a stroke (or right-click), three widths,
+a comment. **send to Claude** writes `<out>/_feedback/<asset>.json` (`box`, `comment`, `notes`,
+`strokes` with `points`, `bbox`, `width`, `color`, `key`, `kind`; all in asset units),
+`<asset>.annotated.png`, `<asset>.marks.svg` (the marks alone, in the asset's viewBox) and
+`<asset>.current.svg`. Only assets in the served file are accepted.

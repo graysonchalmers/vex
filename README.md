@@ -116,6 +116,10 @@ node bin/vex.js build examples/basics.vx.js        # -> examples/out/
 node bin/vex.js serve showcase/noir_cafe.vx.js     # live viewer on http://127.0.0.1:4322
 ```
 
+In the viewer, **✎ annotate** (or `a`) lets you draw on the art and pin notes, then *send to Claude*:
+the marks land in `out/_feedback/` in the art's own units, so "check the feedback" is all the agent
+needs to hear.
+
 Requires Node ≥ 22.18 (it runs the TypeScript sources directly). PNGs are rendered with
 [resvg](https://github.com/linebender/resvg), so every PNG is a faithful rendering of its SVG.
 

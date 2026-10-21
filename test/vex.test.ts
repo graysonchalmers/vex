@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Resvg } from "@resvg/resvg-js";
 import { loadSource } from "../src/node/load.ts";
 import { writeOutputs } from "../src/node/output.ts";
+import { serve } from "../src/node/server.ts";
 
 const svgOf = (src: string, name: string, frame = 0) => loadSource(src).svg(name, frame);
 const throwsMsg = (fn: () => unknown, re: RegExp) => assert.throws(fn, (e: Error) => re.test(e.message));
@@ -277,6 +278,29 @@ test("9-slice keeps corners and stretches the middle; bitmap fonts write BMFont 
     assert.ok(adv(105) < adv(66), "i is narrower than B");
     assert.match(readFileSync(join(dir, "fonts/f.fnt"), "utf8"), /^info face="Open Sans" size=20 .*\ncommon lineHeight=26 /);
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("serve: feedback from the viewer is written in asset units next to the outputs", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vex-fb-"));
+  const file = join(dir, "a.vx.js");
+  writeFileSync(file, `pal({ r: "#e0443e" })\nsprite("dot", { w: 10, h: 6 }, circle(5, 3, 3, "r"))`);
+  const s = await serve(file, { port: 0, out: join(dir, "out"), log: () => {} });
+  const post = (body: unknown) => fetch(s.url + "api/feedback", { method: "POST", body: JSON.stringify(body) });
+  try {
+    const r = await post({ name: "dot", comment: "rounder", notes: [{ x: 5, y: 3, text: "here" }],
+      strokes: [{ color: "#E0443E", width: 0.5, points: [[1, 1], [4.256, 2]] }, { color: "javascript:x", width: 1, points: [[0, 0]] }] });
+    assert.equal(r.status, 200);
+    const fb = JSON.parse(readFileSync(join(dir, "out", "_feedback", "dot.json"), "utf8"));
+    assert.equal(fb.comment, "rounder");
+    assert.deepEqual(fb.notes, [{ n: 1, x: 5, y: 3, text: "here" }]);
+    assert.equal(fb.strokes.length, 1, "invalid strokes are dropped");
+    assert.deepEqual([fb.strokes[0].key, fb.strokes[0].kind, fb.strokes[0].points[1]], ["r", "palette", [4.26, 2]]);
+    assert.ok(existsSync(join(dir, "out", "_feedback", "dot.marks.svg")) && existsSync(join(dir, "out", "_feedback", "dot.current.svg")));
+    assert.equal((await post({ name: "../x" })).status, 400);
+  } finally {
+    s.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });

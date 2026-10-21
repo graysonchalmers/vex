@@ -22,6 +22,11 @@ skill's directory.
 4. Fix with small edits (move a point, change a radius) and rebuild. Repeat.
 5. If the user wants to watch: start `VEX serve art.vx.js` in the background and give them the URL.
    It rebuilds on save and replays the edited asset step by step; it also writes `out/`.
+   **Feedback**: the viewer's annotate mode (`a`) lets the user draw strokes and pin notes on the art
+   and send them. When they say "check the feedback", read `out/_feedback/<asset>.json`: `comment`,
+   `notes` (`x, y` in asset units, the same coordinates as the art file) and `strokes` (points in
+   asset units; `kind: "palette"` with a `key` means "make this that color", `"markup"` points at
+   something). Look at `<asset>.annotated.png` too. Comments persist between sends: check `time`.
 6. Ship: `VEX build art.vx.js --scales 1,2` writes `name.png` and `name@2x.png` plus `.svg`.
 
 Errors name file:line:col and the asset/op path, and suggest fixes ("did you mean 'g'?").

@@ -56,6 +56,22 @@ The same rig drives the LAST CUP robot's arm: ▶ **[watch him drink, 10 s with 
 A shoulder, elbow, hand and cup chain lifts the mug to his jaw while the cup bone counter-rotates
 to keep the coffee level, and the room keeps its own 2 s rhythm of rain, flicker and grain.
 
+### Levels
+
+![A hand-made level](docs/media/level_stage1.png)
+![A generated level](docs/media/level_generated.png)
+
+ASCII maps with a legend: autotiled terrain (grass tops, dirt fill, rounded caps), fixed tiles, and game
+objects with types and properties. Maps can be generated with plain JS. Levels export to **Tiled**
+(.tmj / .tmx + tileset), verified by loading them in Phaser 3. Source: [`levels.vx.js`](showcase/levels.vx.js)
+
+```js
+level("stage1", { tileset: "forest", legend: { "#": platformer({...}), "c": { object: "coin", type: "coin" } }, map: `
+  ....c.c....
+  ..#######..
+  ###########` })
+```
+
 ### Forest Kit: a game-ready platformer pack
 
 ![Forest Kit gameplay poster](docs/media/forest_kit_poster.png)

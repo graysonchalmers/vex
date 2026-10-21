@@ -7,6 +7,7 @@ import { type Box, innerOf } from "../core/svg.ts";
 import { n } from "../core/util.ts";
 import { outlineText, png, previewSvg } from "./raster.ts";
 import { writeSpine } from "./spine.ts";
+import { writeLevel } from "./level.ts";
 
 export interface OutputOptions {
   /** Only these assets/sheets (default: everything exported). */
@@ -122,6 +123,11 @@ export function writeOutputs(p: Project, out: string, opts: OutputOptions = {}):
     } catch (e) {
       errors.push(wrap(e));
     }
+  }
+
+  for (const lv of p.levels) {
+    if (want && !want.has(lv.name)) continue;
+    try { lines.push(writeLevel(p, lv, out)); } catch (e) { errors.push(wrap(e).within(`level '${lv.name}'`, lv.loc)); }
   }
 
   for (const sp of p.spines) {

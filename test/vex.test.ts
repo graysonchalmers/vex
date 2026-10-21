@@ -204,3 +204,35 @@ spine("bot", R, { w: 20, h: 20, scale: 2, clips: { wave: { clip: { arm: { rot: [
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("levels: autotiling, objects, legend errors, Tiled export", async () => {
+  const { writeLevel } = await import("../src/node/level.ts");
+  const src = `for (const k of ["t", "tl", "tr", "f", "fl", "fr"]) sprite("_" + k, { w: 8, h: 8 }, rect(0, 0, 8, 8, "1"))
+tileset("ts", { size: 8, tiles: { top: "_t", topL: "_tl", topR: "_tr", fill: "_f", fillL: "_fl", fillR: "_fr" } })
+sprite("coin", { w: 4, h: 4 }, circle(2, 2, 2, "4"))
+level("lv", { tileset: "ts", legend: { "#": platformer({ top: "top", topL: "topL", topR: "topR", fill: "fill", fillL: "fillL", fillR: "fillR" }),
+  c: { object: "coin", type: "pickup", props: { value: 5 } } }, map: \`
+  ..c..
+  .###.
+  .###.\` })`;
+  const p = loadSource(src);
+  const lv = p.levels[0];
+  assert.deepEqual(lv.grid.tiles, [null, null, null, null, null, null, "topL", "top", "topR", null, null, "fillL", "fill", "fillR", null]);
+  assert.deepEqual(JSON.parse(JSON.stringify(lv.grid.objects[0])), { id: 1, name: "coin", type: "pickup", col: 2, row: 0, props: { value: 5 } });   // props come from the sandbox realm
+  assert.equal(p.build("lv").w, 40);
+  const dir = mkdtempSync(join(tmpdir(), "vex-"));
+  try {
+    writeLevel(p, lv, dir);
+    const j = JSON.parse(readFileSync(join(dir, "levels/lv.tmj"), "utf8"));
+    assert.equal(j.layers[0].data.length, 15);
+    assert.deepEqual(j.layers[0].data.slice(5, 10), [0, 2, 1, 3, 0]);        // gids follow tileset order
+    assert.deepEqual([j.layers[1].objects[0].x, j.layers[1].objects[0].y, j.layers[1].objects[0].properties[0]], [16, 0, { name: "value", type: "int", value: 5 }]);
+    assert.match(readFileSync(join(dir, "levels/lv.tmx"), "utf8"), /<data encoding="csv">\n0,0,0,0,0,\n0,2,1,3,0,/);
+    const png = readFileSync(join(dir, "levels/ts.png"));
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [48, 8]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  throwsMsg(() => loadSource(src.replace("..c..", "..x..")), /map row 1, column 3: 'x' is not in the legend/);
+  throwsMsg(() => loadSource(src.replace('tileset: "ts"', 'tileset: "tz"')), /unknown tileset 'tz' \(did you mean 'ts'\?\)/);
+});

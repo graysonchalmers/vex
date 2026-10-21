@@ -140,6 +140,35 @@ anim("hero_walk", { w: 48, h: 64, frames: 8, fps: 10 }, pose(HERO, WALK))
 equal the first. Stamped anims follow their parent's progress; to keep a short cycle at its own speed
 inside a longer clip, stamp it with an explicit frame: `(f) => stamp("cycle", 0, 0, { frame: f.i % 24 })`.
 
+## Levels and tilemaps
+
+```js
+tileset("forest", { size: 32, tiles: { top: "tile_top", top_l: "tile_top_l", fill: "tile_fill", ... } })
+const ground = platformer({ top: "top", topL: "top_l", topR: "top_r", fill: "fill", fillL: "fill_l", fillR: "fill_r" })
+level("stage1", { tileset: "forest", bg: "sky0", legend: {
+    "#": ground,                                              // autotiled terrain
+    "=": "stone",                                             // a fixed tile
+    "c": { object: "coin", type: "coin", props: { value: 1 } },   // a game object
+  }, map: `
+  ....c.c....
+  ..#######..
+  ###########` })
+level("gen", { tileset: "forest", legend, seed: 7, map: (rng) => /* build rows */ "..." })
+```
+
+| Part | Meaning |
+|---|---|
+| `tileset(name, { size, tiles })` | Tile keys (in tile-id order) mapped to sprites; `size` is the tile size in level units. |
+| map | Rows of characters; `.` and space are empty. A function `(rng) => string` generates one (`seed`). |
+| legend: string | A fixed tile key. |
+| legend: rule | `(n, x, y) => key` with `n.up/down/left/right` and diagonals = "same terrain there". `platformer({...})` is the built-in grass-top / dirt-fill / end-caps rule. `{ terrain, group }` lets several characters count as one terrain. |
+| legend: object | `{ object: sprite, type, props }`: placed bottom-center on its cell in the preview, exported as a Tiled object. |
+| `scale` | Export pixels per unit (default 1). |
+
+Each level is also a scene (preview, PNG, SVG). Export: `out/levels/<name>.tmj` (Tiled JSON, which Phaser,
+Godot and Defold importers read), `<name>.tmx`, the tileset image, and `<name>.html`, which loads the
+`.tmj` in Phaser 3 (serve the folder over HTTP). LDtk export is not implemented.
+
 ## Spine export
 
 ```js

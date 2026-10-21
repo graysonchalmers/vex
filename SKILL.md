@@ -75,6 +75,9 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Skeletal animation**: `rig({ bone: { parent, pivot: [x, y], z, items } })` + `pose(rig, clip)` where a clip is
   `{ bone: { rot | move | scale: [[frame, value, ease?], ...] } }`. Check the anim preview strip frame by frame:
   rotations add up along the chain (a held sword's angle is arm + forearm + sword), and a jump needs headroom.
+- **Levels**: `tileset(name, { size, tiles })` + `level(name, { tileset, legend, map })`. Legend chars are tile keys,
+  autotile rules (`platformer({...})` or `(n) => key`) or `{ object, type, props }`; maps can be generated `(rng) => rows`.
+  Exports Tiled .tmj/.tmx; check `out/levels/<name>.html` and that objects stand on ground, not one row above it.
 - **Spine**: `spine(name, rig, { w, h, scale, outline, clips: { walk: { clip, frames, fps } } })` writes a Spine 4.1
   skeleton + atlas for game runtimes; check it in `out/spine/<name>.html` (served over HTTP).
 - **Animation**: `anim(name, { frames, fps }, ...)`; function items `(f) => items` get `f.i`, `f.n`,

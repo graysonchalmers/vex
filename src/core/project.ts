@@ -2,6 +2,7 @@
 // builder that turns definitions into resolved node trees.
 import { VexError, didYouMean, wrap } from "./errors.ts";
 import { type Clip, type Rig, checkClip, isRig, makeRig, sample } from "./rig.ts";
+import { type LegendEntry, type LevelGrid, buildGrid, parseMap, platformer } from "./level.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
   type AssetDef, type AssetKind, type AssetOpts, type FrameInfo, type GroupDef, type Grad, type Item, type Node,
@@ -130,6 +131,8 @@ export class Project {
   readonly groups = new Map<string, GroupDef>();
   readonly sheets: SheetDef[] = [];
   readonly spines: SpineDef[] = [];
+  readonly tilesets = new Map<string, TilesetDef>();
+  readonly levels: LevelDef[] = [];
   /** Art files loaded so far (absolute paths or virtual names), for locations and watching. */
   readonly files: string[] = [];
   pal: Palette = Palette.builtin("sweetie16");
@@ -312,6 +315,47 @@ export class Project {
       return { __ref: "clip", args: [mask, ...items], step: { label: "clip(…)", loc } };
     });
     env.rig = (spec: unknown) => at("rig", () => makeRig(spec));
+    env.platformer = (keys: unknown) => at("platformer", () => {
+      const need = ["top", "topL", "topR", "fill", "fillL", "fillR"];
+      if (!isPlain(keys) || !need.every((k) => typeof keys[k] === "string")) throw new VexError(`platformer({ ${need.join(", ")} }): tile keys from the tileset`);
+      return platformer(keys as never);
+    });
+    env.tileset = (name: unknown, o: unknown) => at("tileset", (loc) => {
+      if (typeof name !== "string" || !isPlain(o) || !isPlain(o.tiles) || typeof o.size !== "number")
+        throw new VexError('tileset("name", { size: 32, tiles: { key: "sprite_name", ... } })');
+      checkKeys(`tileset '${name}'`, o, ["size", "tiles"]);
+      this.tilesets.set(name, { name, size: o.size, tiles: Object.entries(o.tiles as Record<string, string>), loc });
+    });
+    env.level = (name: unknown, o: unknown) => at("level", (loc) => {
+      if (typeof name !== "string" || !isPlain(o)) throw new VexError('level("name", { tileset, map, legend, bg, seed, scale })');
+      checkKeys(`level '${name}'`, o, ["tileset", "map", "legend", "bg", "seed", "scale"]);
+      const ts = this.tilesets.get(String(o.tileset));
+      if (!ts) throw new VexError(`unknown tileset '${o.tileset}'${didYouMean(String(o.tileset), this.tilesets.keys())}: define it with tileset() first`);
+      const src = typeof o.map === "function" ? (o.map as (r: () => number) => unknown)(rng(Number(o.seed ?? 1))) : o.map;
+      if (typeof src !== "string") throw new VexError("level map must be a string, or a function (rng) => string for generated levels");
+      if (!isPlain(o.legend)) throw new VexError('level legend: { "#": "tile_key" | rule | { object: "sprite" } }');
+      const legend = new Map<string, LegendEntry>();
+      for (const [ch, v] of Object.entries(o.legend)) {
+        if ([...ch].length !== 1) throw new VexError(`legend key '${ch}' must be one character`);
+        if (typeof v === "string") legend.set(ch, { tile: v });
+        else if (typeof v === "function") legend.set(ch, { terrain: v as never, group: ch });
+        else if (isPlain(v) && typeof v.object === "string") legend.set(ch, { object: v.object, type: v.type as string | undefined, props: v.props as Record<string, unknown> | undefined });
+        else if (isPlain(v) && typeof v.terrain === "function") legend.set(ch, { terrain: v.terrain as never, group: String(v.group ?? ch) });
+        else throw new VexError(`legend '${ch}': a tile key, a rule function, { terrain, group } or { object: "sprite", type, props }`);
+      }
+      const grid = buildGrid(parseMap(src), legend, new Set(ts.tiles.map(([k]) => k)));
+      const tileAsset = new Map(ts.tiles);
+      const S = ts.size;
+      // The level is also a scene, so it previews, exports and stamps like any vex asset.
+      define("scene", name, [{ w: grid.cols * S, h: grid.rows * S, ...(o.bg !== undefined ? { bg: o.bg } : {}) },
+        () => grid.tiles.flatMap((k, i) => {
+          if (!k) return [];
+          const asset = tileAsset.get(k)!, b = this.build(asset);
+          return [(env.stamp as (...a: unknown[]) => unknown)(asset, (i % grid.cols) * S, Math.floor(i / grid.cols) * S, { scale: S / b.w })];
+        }),
+        () => grid.objects.map((ob) => (env.stamp as (...a: unknown[]) => unknown)(ob.name, ob.col * S + S / 2, (ob.row + 1) * S, { anchor: "bottom" }))]);
+      this.levels.push({ name, tileset: ts, grid, scale: Number(o.scale ?? 1), loc });
+    });
     // Spine export: each bone's art becomes a hidden part sprite (rest pose, full asset box).
     env.spine = (name: unknown, rg: unknown, o: unknown) => at("spine", (loc) => {
       if (typeof name !== "string" || !name) throw new VexError('spine("name", rig, { w, h, scale, outline, clips: { walk: { clip, frames, fps } } })');
@@ -594,6 +638,24 @@ function stepOf(item: unknown, def: AssetDef): Step {
   if (typeof item === "function") return { label: "ƒ(f)", loc: def.loc };
   if (Array.isArray(item)) return { label: `[${item.length} items]`, loc: def.loc };
   return { label: "item", loc: def.loc };
+}
+
+export interface TilesetDef {
+  name: string;
+  /** Tile size in level units. */
+  size: number;
+  /** [key, sprite name] in tile-id order. */
+  tiles: [string, string][];
+  loc?: string;
+}
+
+export interface LevelDef {
+  name: string;
+  tileset: TilesetDef;
+  grid: LevelGrid;
+  /** Export pixels per unit. */
+  scale: number;
+  loc?: string;
 }
 
 export interface SpineDef {

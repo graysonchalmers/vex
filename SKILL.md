@@ -66,6 +66,10 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Style**: last argument of a shape. A color string = fill (stroke for `line`/`curve`/`arc`), or
   `{ fill, stroke, sw, opacity, cap, join, dash, glow, blur }`. Fills can be gradients:
   `lin(colors, angleDeg)` and `rad(colors, { cx, cy, r })`, relative to the shape's box.
+- **Hand-drawn look** (painted card-game style): `ink: { c, w, taper, wobble }` draws a wobbly ink line
+  whose weight follows the light; `shade: { light, rim, hi, brush }` paints a form shadow, highlight and
+  brush texture from one light direction (shadow color from the fill's ramp); `hatch: "k"` hatches the
+  shadow. `anim(..., { boil: 3 })` redraws the wobble every 3 frames.
 - **Shapes**: `rect circle ellipse poly blob line curve path star ngon arc text`. `blob`/`curve`
   pass smoothly through their points (`smooth: 0..1`); `path` takes raw SVG path data.
 - **Structure**: `tf({ x, y, rot, scale, flip, origin, opacity, glow, blur }, ...items)` groups;
@@ -105,7 +109,10 @@ Full API with every option: [reference.md](reference.md).
 - Cel shading: base shape, then a darker shape and a lighter highlight `clip`ped to the base, all
   from the same material ramp (`ramps("kGgw")`, `dark("g")`, `lite("g")`). 2–3 tones per material.
 - Light from one direction (usually top-left) across every asset in a set; highlights and shadows
-  must agree.
+  must agree. For the hand-drawn look, put it in one constant (`const LIGHT = 315`) and pass it to
+  every `ink` and `shade`; give every material a ramp so the shading picks its colors.
+- Hand-drawn line weight: heavier (`w` 4–6) on outer silhouettes, lighter (2–3) on inner detail,
+  tapered open strokes (`taper` 0.3–0.6) for mouths, creases and claws.
 - Variants are `base` + `swap`; repeated details are `_parts` + `stamp`; families are a loop:
   `for (const [i, c] of ["r", "b", "y"].entries()) sprite("gem_" + i, ...)`.
 - Organic shapes: `blob` with 6–10 points beats hand-written Béziers. Hard-edged things (crates,

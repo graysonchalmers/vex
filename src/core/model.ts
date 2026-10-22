@@ -1,5 +1,6 @@
 // The data an art file produces. Definitions are plain data + closures; nothing is resolved
 // until build time, so references between assets are order-independent.
+import type { HatchOpts, InkOpts, ShadeOpts } from "./hand.ts";
 import type { Palette } from "./palette.ts";
 
 export interface Grad {
@@ -39,6 +40,12 @@ export interface Style {
   grain?: GrainOpts;
   /** CSS mix-blend-mode: "screen", "multiply", "overlay", "soft-light", ... */
   blend?: string;
+  /** Hand-drawn ink line along the outline; the fill follows its wobble. */
+  ink?: InkOpts;
+  /** Painted form shading from one light direction. */
+  shade?: ShadeOpts;
+  /** Line hatching inside the shape (only in the shadow when the shape is shaded). */
+  hatch?: HatchOpts;
 }
 
 export interface GrainOpts {
@@ -48,7 +55,7 @@ export interface GrainOpts {
   seed?: number;
 }
 
-export const STYLE_KEYS = ["fill", "stroke", "sw", "opacity", "cap", "join", "dash", "glow", "blur", "grain", "blend"];
+export const STYLE_KEYS = ["fill", "stroke", "sw", "opacity", "cap", "join", "dash", "glow", "blur", "grain", "blend", "ink", "shade", "hatch"];
 
 /** A resolved, drawable element. */
 export type Node = ShapeNode | GroupNode | ClipNode;
@@ -78,6 +85,8 @@ export interface GroupNode {
   pal?: Palette;
   /** Draw the children as one solid silhouette, grown by `ow` (auto-outline). */
   silhouette?: { color: string; ow: number };
+  /** Reseeds the ink wobble inside (an anim's boil step). */
+  boil?: number;
   children: Node[];
   step?: Step;
 }
@@ -133,6 +142,8 @@ export interface AssetOpts {
   slice?: [number, number, number, number];
   frames?: number;
   fps?: number;
+  /** Anims: redraw the ink wobble every N frames, like hand-drawn line boil. */
+  boil?: number;
 }
 
 export interface AssetDef {

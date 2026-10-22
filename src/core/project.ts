@@ -4,6 +4,7 @@ import { VexError, didYouMean, wrap } from "./errors.ts";
 import { type Clip, type Rig, checkClip, isRig, makeRig, sample } from "./rig.ts";
 import { checkParticles, simulate } from "./vfx.ts";
 import { type LegendEntry, type LevelGrid, buildGrid, parseMap, platformer } from "./level.ts";
+import { type HatchOpts, type InkOpts, type ShadeOpts, HATCH_KEYS, INK_KEYS, SHADE_KEYS } from "./hand.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
   type AssetDef, type AssetKind, type AssetOpts, type FrameInfo, type GroupDef, type Grad, type Item, type Node,
@@ -16,7 +17,7 @@ import { fmtArgs, globRe, hash, n, pickRange, rng } from "./util.ts";
 const ASSET_OPTS: Record<AssetKind, string[]> = {
   sprite: ["w", "h", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale", "slice"],
   scene: ["w", "h", "bg", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale"],
-  anim: ["w", "h", "bg", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale", "frames", "fps"],
+  anim: ["w", "h", "bg", "base", "mx", "my", "swap", "flip", "rot", "outline", "ow", "scale", "frames", "fps", "boil"],
 };
 const USE_OPTS = ["scale", "rot", "flip", "anchor", "swap", "opacity", "frame", "delay", "seed"];
 const SCATTER_OPTS = USE_OPTS;
@@ -77,6 +78,11 @@ function isPlain(v: unknown): v is Record<string, unknown> {
 function checkKeys(what: string, obj: object, allowed: string[]): void {
   for (const k of Object.keys(obj))
     if (!allowed.includes(k)) throw new VexError(`${what}: unknown option '${k}'${didYouMean(k, allowed)} (allowed: ${allowed.join(", ")})`);
+}
+
+function nums(what: string, o: Record<string, unknown>, keys: string[]): void {
+  for (const k of keys) if (o[k] !== undefined && !(typeof o[k] === "number" && Number.isFinite(o[k])))
+    throw new VexError(`${what} ${k} must be a number, got ${JSON.stringify(o[k])}`);
 }
 
 function checkArgs(name: string, spec: string, args: unknown[]): void {
@@ -204,12 +210,31 @@ export class Project {
           if (!isPlain(val)) throw new VexError("grain must be { freq, octaves, seed }");
           checkKeys("grain", val, ["freq", "octaves", "seed"]);
           style.grain = val as Style["grain"];
+        } else if (k === "ink" || k === "hatch") {
+          const keys = k === "ink" ? INK_KEYS : HATCH_KEYS;
+          const o = typeof val === "string" ? { c: val } : val;
+          if (!isPlain(o)) throw new VexError(`${k} must be a color or { ${keys.join(", ")} }`);
+          checkKeys(k, o, keys);
+          color(o.c, `${k} c`);
+          nums(k, o, keys.filter((x) => x !== "c" && x !== "cross"));
+          style[k] = o as unknown as InkOpts & HatchOpts;
+        } else if (k === "shade") {
+          const o = val === true ? {} : val;
+          if (!isPlain(o)) throw new VexError(`shade must be true or { ${SHADE_KEYS.join(", ")} }`);
+          checkKeys("shade", o, SHADE_KEYS);
+          for (const c of ["c", "rim"]) if (o[c] !== undefined) color(o[c], `shade ${c}`);
+          if (typeof o.hi === "string") color(o.hi, "shade hi");
+          else if (o.hi !== undefined && typeof o.hi !== "boolean") throw new VexError("shade hi must be a color, true or false");
+          nums("shade", o, ["light", "depth", "soft", "brush"]);
+          style.shade = o as ShadeOpts;
         } else if (k === "blend") {
           if (!BLENDS.includes(val as string)) throw new VexError(`blend must be one of ${BLENDS.join(", ")}${didYouMean(String(val), BLENDS)}`);
           style.blend = val as string;
         } else (style as Record<string, unknown>)[k] = val;
       }
-      if (style.fill === undefined && style.stroke === undefined) {
+      if ((style.ink || style.shade || style.hatch) && style.grain) throw new VexError("grain can't be combined with ink, shade or hatch; put the grain on its own shape");
+      if (style.shade && style.fill === undefined) throw new VexError("shade needs a fill to shade");
+      if (style.fill === undefined && style.stroke === undefined && !style.ink) {
         if (strokeDefault) throw new VexError(`style needs a stroke (or fill)`);
         throw new VexError(`style needs a fill or a stroke`);
       }
@@ -250,6 +275,7 @@ export class Project {
       checkKeys(`${kind} '${name}'`, opts, ASSET_OPTS[kind]);
       if (opts.outline !== undefined) color(opts.outline, "outline");
       if (opts.bg !== undefined) paintArg(opts.bg, "bg");
+      if (opts.boil !== undefined && !(Number.isInteger(opts.boil) && opts.boil > 0)) throw new VexError(`boil must be a whole number of frames > 0, got ${JSON.stringify(opts.boil)}`);
       for (const [k, v] of Object.entries(opts.swap ?? {})) { color(k, "swap key"); color(v, "swap value"); }
       this.assets.set(name, { kind, name, opts, items: rest as Item[], pal: this.pal, loc });
       this.order.push(name);
@@ -282,6 +308,7 @@ export class Project {
         const argc = spec.args.split(" ").length;
         const { style, ex } = styleArg(args[argc], spec.extra, !!spec.stroke);
         if (args.length > argc + 1) throw new VexError(`too many arguments; options go in the style object`);
+        if (name === "text" && (style.ink || style.shade || style.hatch)) throw new VexError("ink, shade and hatch work on shapes, not text");
         return { k: "shape", ...shapeGeom(name, args, ex), style, step: { label: `${name}(${fmtArgs(args.slice(0, argc))})`, loc } };
       });
     }
@@ -539,6 +566,7 @@ export class Project {
 
     let nodes = raw;
     const post: string[] = [];
+    if (opts.boil && Math.floor(frame / opts.boil)) nodes = [{ k: "g", boil: Math.floor(frame / opts.boil), children: nodes }];
     if (opts.mx) {
       nodes = [{ k: "g", children: nodes }, { k: "g", tf: `matrix(-1 0 0 1 ${n(w)} 0)`, children: nodes }];
       post.push("mirror x");

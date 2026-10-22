@@ -18,6 +18,15 @@ Built for AI agents (it ships as a Claude Code skill) and just as usable by hand
 
 Everything below was written as code in vex. Sources are in [`showcase/`](showcase/).
 
+### Hand-drawn: ink, paint and hatching
+
+![A swamp toad with a lantern and a dagger, inked and painted in a hand-drawn card-game style](docs/media/hand_drawn.png)
+
+Source: [`hand_drawn.vx.js`](showcase/hand_drawn.vx.js). Ordinary vex shapes with three style
+keys: `ink` (a wobbly line whose weight follows the light and tapers at the ends), `shade` (form
+shadow, highlight, rim light and brush texture from one light direction, colors from the palette
+ramps) and `hatch`. Anims can `boil` the lines, and Spine export keeps the look on every bone.
+
 ### LAST CUP: a cyberpunk noir scene
 
 ![LAST CUP: a robot alone in a rainy cyberpunk coffee shop](docs/media/last_cup.gif)
@@ -142,6 +151,8 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
   `curve` pass smoothly through their points, so organic shapes take a few numbers.
 - **Paint:** palette keys and ramps, linear and radial gradients, glow, blur, procedural `grain`,
   `blend` modes.
+- **Hand-drawn:** `ink` lines with weight, taper and wobble, painted `shade` from one light, `hatch`,
+  and line `boil` in anims.
 - **Structure:** `tf` transform groups, `sym` mirroring, `clip` for cel shading and highlights,
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.

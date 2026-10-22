@@ -2,6 +2,7 @@
 // through the whole build so swaps (variants, use(..., { swap })) compose, and resolve here.
 import { VexError } from "./errors.ts";
 import { type GlowOpts, type Grad, type Node, type Paint, type ShapeNode, type Style, isGrad } from "./model.ts";
+import { bounds, inkD, lightDir, linesD, outline, shapeSeed, wobbled } from "./hand.ts";
 import type { Palette } from "./palette.ts";
 import { esc, n } from "./util.ts";
 
@@ -23,6 +24,8 @@ class Ctx {
   private next = 0;
   pals: Palette[];
   swaps: Record<string, string>[] = [];
+  /** Sum of the enclosing boil offsets. */
+  boil = 0;
   readonly prefix: string;
 
   constructor(pal: Palette, prefix: string) {
@@ -50,6 +53,20 @@ class Ctx {
     for (let i = this.swaps.length - 1; i >= 0; i--) k = this.swaps[i][k] ?? k;
     for (let i = this.pals.length - 1; i > 0; i--) if (this.pals[i].has(k)) return this.pals[i].resolve(k);
     return this.pals[0].resolve(k);
+  }
+
+  /** The color `by` ramp steps from a key (after swaps), or undefined when it is in no ramp. */
+  step(c: Paint, by: number): string | undefined {
+    if (typeof c !== "string") return undefined;
+    let k = c;
+    for (let i = this.swaps.length - 1; i >= 0; i--) k = this.swaps[i][k] ?? k;
+    for (let i = this.pals.length - 1; i >= 0; i--) {
+      if (!this.pals[i].colors.has(k)) continue;
+      const ramp = this.pals[i].ramps.find((r) => r.includes(k));
+      if (!ramp) return undefined;
+      return this.pals[i].resolve(ramp[Math.max(0, Math.min(ramp.length - 1, ramp.indexOf(k) + by))]);
+    }
+    return undefined;
   }
 }
 
@@ -124,7 +141,119 @@ function styleAttrs(ctx: Ctx, s: Style, sil?: Sil): string {
   return a + filters(ctx, s);
 }
 
+const isNone = (ctx: Ctx, p: Paint | undefined) => p === undefined || (typeof p === "string" && ctx.color(p) === "none");
+
+/** Blur filter limited to a region in the blurred element's own coordinates. */
+function blurFilter(ctx: Ctx, r: number, x: number, y: number, w: number, h: number): string {
+  const body = `<feGaussianBlur stdDeviation="${n(r)}"/>`;
+  return ctx.def(`${body}${n(x)},${n(y)},${n(w)},${n(h)}`, (id) =>
+    `<filter id="${id}" filterUnits="userSpaceOnUse" x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}">${body}</filter>`);
+}
+
+/** Paint attributes for a color that may come with its own opacity. */
+function tint(ctx: Ctx, c: string | undefined, fallback: string, opacity: number): string {
+  const col = c ?? fallback;
+  return paint(ctx, "fill", col) + (c === undefined && opacity < 1 ? ` opacity="${n(opacity)}"` : "");
+}
+
+/**
+ * A shape drawn by hand: fill (following the ink's wobble), painted shading clipped to it,
+ * hatching, then the ink line on top. In silhouette mode, the fill and the ink grown by `ow`.
+ */
+function hand(ctx: Ctx, s: ShapeNode, sil?: Sil): string {
+  const st = s.style, ink = st.ink, sh = st.shade;
+  const polys = outline(s);
+  const seed = shapeSeed(s, ink?.seed ?? 0, ctx.boil);
+  const amp = ink ? ink.wobble ?? (ink.w ?? 2) * 0.4 : 0;
+  const lines = wobbled(polys, amp, seed);
+  // the body: the exact element, or the wobbled outline (every subpath closed, as SVG fills it)
+  const geomD = amp ? linesD(lines.map((l) => ({ ...l, closed: true }))) : "";
+  const attrs = Object.entries(s.attrs).map(([k, v]) => ` ${k}="${typeof v === "number" ? n(v) : esc(v)}"`).join("");
+  // the wobbled outline is long and reused by the fill, clip and masks: define it once
+  const gid = geomD ? ctx.def(`<path d="${geomD}"/>`, (id) => `<path id="${id}" d="${geomD}"/>`) : "";
+  const geom = (a: string) => (gid ? `<use href="#${gid}"${a}/>` : `<${s.tag}${attrs}${a}/>`);
+  const inkPath = ink ? inkD(lines, { ...ink, light: ink.light ?? sh?.light }, seed) : "";
+  const filled = !isNone(ctx, st.fill), stroked = !isNone(ctx, st.stroke);
+
+  if (sil) {
+    let out = filled || stroked ? geom(styleAttrs(ctx, { ...st, ink: undefined, shade: undefined, hatch: undefined }, sil)) : "";
+    if (inkPath) out += `<path d="${inkPath}"${paint(ctx, "fill", sil.color)}${paint(ctx, "stroke", sil.color)} stroke-width="${n(2 * sil.ow)}" stroke-linejoin="round"/>`;
+    return out;
+  }
+
+  let body = filled ? geom(paint(ctx, "fill", st.fill!)) : "";
+  const b = bounds(polys), size = Math.max(b.w, b.h, 1);
+  if (sh || st.hatch) {
+    const clip = ctx.id();
+    ctx.defs.push(`<clipPath id="${clip}">${geom("")}</clipPath>`);
+    // everything here is clipped to the shape, so its box (+1 for antialiasing) bounds all the work
+    const area = `x="${n(b.x - 1)}" y="${n(b.y - 1)}" width="${n(b.w + 2)}" height="${n(b.h + 2)}"`;
+    const L = lightDir(sh?.light ?? 315);
+    /** Mask that keeps the shape's edge band on one side: a copy shifted by d covers the rest. */
+    const band = (d: number, soft: number): string => {
+      const id = ctx.id(), dx = L[0] * d, dy = L[1] * d, m = 3 * soft + 1;
+      // blur only the part of the copy that lands on the box once shifted
+      const x0 = Math.max(b.x, b.x - dx) - m, x1 = Math.min(b.x + b.w, b.x + b.w - dx) + m;
+      const y0 = Math.max(b.y, b.y - dy) - m, y1 = Math.min(b.y + b.h, b.y + b.h - dy) + m;
+      const cover = x1 > x0 && y1 > y0
+        ? `<g transform="translate(${n(dx)} ${n(dy)})"><g filter="url(#${blurFilter(ctx, soft, x0, y0, x1 - x0, y1 - y0)})">${geom(' fill="#000"')}</g></g>`
+        : "";
+      ctx.defs.push(`<mask id="${id}" maskUnits="userSpaceOnUse" ${area}><rect ${area} fill="#fff"/>${cover}</mask>`);
+      return id;
+    };
+    let inner = "", shadowMask = "";
+    if (sh) {
+      const depth = (sh.depth ?? 0.35) * size, soft = (sh.soft ?? 0.1) * size;
+      shadowMask = band(depth, soft);
+      inner += `<rect ${area}${tint(ctx, sh.c ?? ctx.step(st.fill!, -2), "#1a1030", 0.5)} mask="url(#${shadowMask})"/>`;
+      if (sh.hi !== false) {
+        const hi = band(-depth * 0.45, soft * 0.6);
+        const c = typeof sh.hi === "string" ? sh.hi : ctx.step(st.fill!, 1);
+        inner += `<g opacity="0.75"><rect ${area}${tint(ctx, c, "#ffffff", 0.4)} mask="url(#${hi})"/></g>`;
+      }
+    }
+    if (st.hatch) {
+      const h = st.hatch, gap = h.gap ?? 4, pid = ctx.id();
+      const lineW = n(h.w ?? 1), col = paint(ctx, "fill", h.c);
+      const cross = h.cross ? `<rect x="0" y="0" width="${n(gap)}" height="${lineW}"${col}/>` : "";
+      ctx.defs.push(`<pattern id="${pid}" width="${n(gap)}" height="${n(gap)}" patternUnits="userSpaceOnUse" patternTransform="rotate(${n(90 + (h.angle ?? 45))})">` +
+        `<rect x="0" y="0" width="${lineW}" height="${n(gap)}"${col}/>${cross}</pattern>`);
+      inner += `<rect ${area} fill="url(#${pid})" opacity="${n(h.opacity ?? 0.5)}"${shadowMask ? ` mask="url(#${shadowMask})"` : ""}/>`;
+    }
+    if (sh?.rim) inner += `<rect ${area}${paint(ctx, "fill", sh.rim)} mask="url(#${band(size * 0.05, size * 0.015)})"/>`;
+    body += `<g clip-path="url(#${clip})">${inner}</g>`;
+  }
+  if (sh && (sh.brush ?? 0.5) > 0 && filled) body = `<g filter="url(#${brushFilter(ctx, sh.brush ?? 0.5, seed % 1000)})">${body}</g>`;
+  if (stroked) body += geom(` fill="none"` + paint(ctx, "stroke", st.stroke!) + ` stroke-width="${n(st.sw ?? 1)}" stroke-linecap="${st.cap ?? "round"}" stroke-linejoin="${st.join ?? "round"}"`);
+  if (inkPath) body += `<path d="${inkPath}"${paint(ctx, "fill", ink!.c)}${ink!.dry ? ` filter="url(#${dryFilter(ctx, ink!.dry, seed % 1000)})"` : ""}/>`;
+  let a = "";
+  if (st.opacity !== undefined && st.opacity < 1) a += ` opacity="${n(st.opacity)}"`;
+  if (st.blend && st.blend !== "normal") a += ` style="mix-blend-mode:${st.blend}"`;
+  a += filters(ctx, { glow: st.glow, blur: st.blur });
+  return a ? `<g${a}>${body}</g>` : body;
+}
+
+/** Streaky brush texture multiplied over the paint, kept inside its alpha. */
+function brushFilter(ctx: Ctx, strength: number, seed: number): string {
+  const k = Math.max(0, Math.min(1, strength));
+  const body = `<feTurbulence type="fractalNoise" baseFrequency="0.05 0.45" numOctaves="2" seed="${seed}" result="t"/>` +
+    `<feColorMatrix in="t" type="matrix" values="0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0 1"/>` +
+    `<feComponentTransfer result="m"><feFuncR type="linear" slope="${n(2 * k)}" intercept="${n(1 - 1.4 * k)}"/><feFuncG type="linear" slope="${n(2 * k)}" intercept="${n(1 - 1.4 * k)}"/><feFuncB type="linear" slope="${n(2 * k)}" intercept="${n(1 - 1.4 * k)}"/></feComponentTransfer>` +
+    `<feBlend in="SourceGraphic" in2="m" mode="multiply"/><feComposite in2="SourceGraphic" operator="in"/>`;
+  return ctx.def(body, (id) => `<filter id="${id}" x="0" y="0" width="100%" height="100%">${body}</filter>`);
+}
+
+/** Dry-brush breaks: fine noise thresholded into the ink's alpha. */
+function dryFilter(ctx: Ctx, dry: number, seed: number): string {
+  const th = 0.75 - 0.4 * Math.max(0, Math.min(1, dry));
+  const body = `<feTurbulence type="fractalNoise" baseFrequency="0.25 0.9" numOctaves="2" seed="${seed}" result="t"/>` +
+    `<feColorMatrix in="t" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -8 0 0 0 ${n(8 * th + 1)}" result="m"/>` +
+    `<feComposite in="SourceGraphic" in2="m" operator="in"/>`;
+  return ctx.def(body, (id) => `<filter id="${id}" x="0" y="0" width="100%" height="100%">${body}</filter>`);
+}
+
 function shape(ctx: Ctx, s: ShapeNode, sil?: Sil): string {
+  if (s.style.ink || s.style.shade || s.style.hatch) return hand(ctx, s, sil);
   if (sil && s.style.fill === undefined && s.style.stroke === undefined) return "";
   const attrs = Object.entries(s.attrs).map(([k, v]) => ` ${k}="${typeof v === "number" ? n(v) : esc(v)}"`).join("");
   const st = styleAttrs(ctx, s.style, sil);
@@ -143,6 +272,7 @@ function node(ctx: Ctx, v: Node, sil?: Sil): string {
   }
   if (v.pal) ctx.pals.push(v.pal);
   if (v.swap) ctx.swaps.push(v.swap);
+  if (v.boil) ctx.boil += v.boil;
   try {
     let inner: string;
     if (v.silhouette) {
@@ -158,6 +288,7 @@ function node(ctx: Ctx, v: Node, sil?: Sil): string {
     }
     return a ? `<g${a}>${inner}</g>` : inner;
   } finally {
+    if (v.boil) ctx.boil -= v.boil;
     if (v.swap) ctx.swaps.pop();
     if (v.pal) ctx.pals.pop();
   }

@@ -304,3 +304,82 @@ test("serve: feedback from the viewer is written in asset units next to the outp
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("hand: ink is a filled band, the fill follows its wobble, and both are seeded", () => {
+  const src = `pal({ k: "#100800", g: "#40a040" })
+sprite("a", { w: 60, h: 60 }, circle(30, 30, 20, { fill: "g", ink: { c: "k", w: 4 } }))
+sprite("b", { w: 60, h: 60 }, circle(30, 30, 20, { fill: "g", ink: { c: "k", w: 4, wobble: 0 } }))`;
+  const a = svgOf(src, "a");
+  // the wobbled outline is defined once and used by the fill
+  const def = /<path id="(a_\d+)" d="M[^"]+Z"\/>/.exec(a);
+  assert.ok(def, "outline def");
+  assert.match(a, new RegExp(`<use href="#${def[1]}" fill="#40a040"/>`));
+  // ink: outer ring + inner ring, filled with the ink color
+  const ink = /<path d="(M[^"]+Z)(M[^"]+Z)" fill="#100800"\/>/.exec(a);
+  assert.ok(ink, "ink band with two rings");
+  assert.equal(a, svgOf(src, "a"), "same every build");
+  // no wobble: the fill is the exact circle
+  assert.match(svgOf(src, "b"), /<circle cx="30" cy="30" r="20" fill="#40a040"\/>/);
+});
+
+test("hand: ink weight follows the light, open lines taper, ink alone draws a line", () => {
+  const p = loadSource(`sprite("a", { w: 60, h: 60 }, circle(30, 30, 20, { fill: "#fff", ink: { c: "#000", w: 6, wobble: 0, vary: 0, light: 0, weight: 0.5 } }))
+sprite("l", { w: 60, h: 20 }, line([0, 10, 60, 10], { ink: { c: "#000", w: 4, wobble: 0, vary: 0, taper: 0.5 } }))`);
+  const img = (name: string) => new Resvg(p.svg(name), { fitTo: { mode: "zoom", value: 4 } }).render();
+  const px = (name: string, x: number, y: number) => { const i = img(name); return i.pixels[((y * 4) * i.width + x * 4) * 4 + 3]; };
+  // light from above: down the middle column, the ring's bottom is heavier than its top
+  const a = img("a"), col = (y0: number, y1: number) => {
+    let c = 0;
+    for (let y = y0 * 4; y < y1 * 4; y++) { const o = (y * a.width + 120) * 4; if (a.pixels[o + 3] > 128 && a.pixels[o + 1] < 128) c++; }
+    return c;
+  };
+  assert.ok(col(40, 60) > col(0, 20) * 1.5, `shadow side is heavier (${col(40, 60)} vs ${col(0, 20)} px)`);
+  // taper: full width in the middle, nothing at the very ends
+  assert.ok(px("l", 30, 11) > 200);
+  assert.ok(px("l", 1, 11) < 50);
+});
+
+test("hand: shade picks ramp colors, falls back without a ramp, and hatching follows the shadow", () => {
+  const src = `pal({ g0: "#103010", g1: "#206020", g2: "#40a040", g3: "#90e090", q: "#808080" })
+ramps("g0 g1 g2 g3")
+sprite("a", { w: 40, h: 40 }, circle(20, 20, 15, { fill: "g2", shade: true, hatch: "g0" }))
+sprite("b", { w: 40, h: 40 }, circle(20, 20, 15, { fill: "q", shade: { brush: 0 } }))`;
+  const a = svgOf(src, "a");
+  assert.match(a, /<rect [^>]*fill="#103010" mask="url\(#(a_\d+)\)"\/>/, "shadow two steps darker");
+  assert.match(a, /fill="#90e090" mask=/, "highlight one step lighter");
+  const shadowMask = /fill="#103010" mask="url\(#(a_\d+)\)"/.exec(a)![1];
+  assert.match(a, new RegExp(`fill="url\\(#a_\\d+\\)" opacity="0.5" mask="url\\(#${shadowMask}\\)"`), "hatch masked by the shadow");
+  assert.match(a, /<g clip-path="url\(#a_\d+\)">/);
+  assert.match(a, /baseFrequency="0.05 0.45"/, "brush texture by default");
+  const b = svgOf(src, "b");
+  assert.match(b, /fill="#1a1030" opacity="0.5" mask=/, "fallback shadow without a ramp");
+  assert.doesNotMatch(b, /baseFrequency/, "brush: 0 drops the texture");
+});
+
+test("hand: outlines include the ink, boil redraws every N frames, any path data flattens", () => {
+  const src = `sprite("o", { w: 40, h: 40, outline: "#000", ow: 1 }, circle(20, 20, 12, { fill: "#fff", ink: "#333" }))
+anim("b", { w: 40, h: 40, frames: 6, boil: 2 }, circle(20, 20, 12, { fill: "#fff", ink: "#333" }))
+sprite("p", { w: 60, h: 60 }, path("M5 5h20v10H15V25q5 5 10 0t10 0s5 5 10 0c0 5 5 5 5 10a10 6 30 0 1 -20 0l-5 5z m30 -20 l5 0 0 5z", { fill: "#fff", ink: "#000", shade: true }))`;
+  const p = loadSource(src);
+  assert.match(p.svg("o"), /<path d="M[^"]+" fill="#000000" stroke="#000000" stroke-width="2"/, "ink grows the silhouette");
+  const f = [0, 1, 2, 3, 4].map((i) => p.svg("b", i).replace(/b_(f\d+_)?/g, ""));
+  assert.equal(f[0], f[1]);
+  assert.notEqual(f[1], f[2]);
+  assert.equal(f[2], f[3]);
+  assert.notEqual(f[3], f[4]);
+  const svg = p.svg("p");
+  assert.equal((svg.match(/<path id="p_\d+" d="([^"]+)"/)![1].match(/M/g) ?? []).length, 2, "two subpaths");
+  // renders at an odd scale and rotation (filter regions stay valid)
+  for (const scale of [1, 3.7]) assert.ok(new Resvg(p.svg("p", 0, scale)).render().width > 0);
+});
+
+test("hand: errors name the problem", () => {
+  const bad = (style: string, re: RegExp, shape = "circle(5, 5, 4, ") => throwsMsg(() => loadSource(`sprite("a", { w: 10, h: 10 }, ${shape}${style}))`), re);
+  bad(`{ fill: "1", ink: { c: "0", wobbel: 1 } }`, /ink: unknown option 'wobbel'.*did you mean 'wobble'/);
+  bad(`{ fill: "1", ink: { c: "0", w: "3" } }`, /ink w must be a number/);
+  bad(`{ stroke: "1", shade: true }`, /shade needs a fill/);
+  bad(`{ fill: "1", ink: "0", grain: {} }`, /grain can't be combined/);
+  bad(`{ fill: "1", ink: "nope" }`, /unknown color 'nope'/);
+  bad(`{ fill: "1", ink: "0" }`, /not text/, `text(1, 5, "hi", `);
+  throwsMsg(() => loadSource(`anim("a", { w: 4, h: 4, boil: 0.5 }, circle(2, 2, 2, "1"))`), /boil must be a whole number/);
+});

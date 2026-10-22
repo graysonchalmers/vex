@@ -48,6 +48,7 @@ globs.
 | `outline: "k"`, `ow: 2` | Silhouette outline of width `ow` around everything drawn; **grows the drawn box by `ow` on every side**. Clipped detail never grows it. |
 | `scale` | Export pixels per unit (default 1). CLI `--scales` multiplies it. |
 | `frames`, `fps` | Anims only. |
+| `boil` | Anims only: redraw the ink wobble every N frames (hand-drawn line boil). |
 
 Post-processing order: items → mirror → swap → flip/rot → outline.
 
@@ -92,6 +93,51 @@ The last argument is the style: a color (fill; stroke for `line`, `curve`, `arc`
 | `dash` | `[on, off, ...]`. |
 | `glow` | `r` or `{ r, color, strength: 1..4 }`: soft halo (flames, magic, neon). |
 | `blur` | Gaussian blur radius (soft shadows, light). |
+| `ink`, `shade`, `hatch` | Hand-drawn look (below). |
+
+### Hand-drawn look
+
+Three style keys turn any shape (not `text`) into inked, painted art. They are seeded from the
+shape's geometry, so every build gives the same drawing.
+
+```js
+const LIGHT = 315                                   // degrees the light comes from: 0 = above, clockwise
+blob([...], { fill: "m2", ink: { c: "k", w: 5, light: LIGHT }, shade: { light: LIGHT, rim: "m3" }, hatch: "m0" })
+curve([...], { ink: { c: "k", w: 4, taper: 0.35 } })   // ink alone draws a hand-inked line
+```
+
+| `ink` (a color or an object) | Meaning |
+|---|---|
+| `c` | Line color. |
+| `w` | Widest width in units (default 2). |
+| `vary` | 0..1, how much the width wanders along the line (default 0.35). |
+| `taper` | 0..1, share of an open line that tapers to a point at each end (default 0.3). |
+| `wobble` | Wobble amplitude in units (default `w * 0.4`; 0 = exact). The fill follows the same wobble. |
+| `light`, `weight` | Closed lines get up to `weight` (default 0.5) heavier on the side away from `light` (default: `shade.light`, else 315). |
+| `dry` | 0..1, dry-brush breaks in the line. |
+| `seed` | Another drawing of the same shape. |
+
+| `shade` (true or an object; needs a `fill`) | Meaning |
+|---|---|
+| `light` | Light direction, as above (default 315, top-left). |
+| `c` | Shadow color. Default: two ramp steps darker than the fill (`ramps`), else translucent dark. |
+| `depth` | How far the shadow reaches in from the far edge, as a fraction of the shape's size (default 0.35). |
+| `soft` | Shadow edge softness, a fraction of the size (default 0.1). |
+| `hi` | Highlight on the lit edge: a color, `true` (default: one ramp step lighter, else translucent white) or `false`. |
+| `rim` | Rim light color along the shadow edge. |
+| `brush` | 0..1 streaky brush texture over the fill and shading (default 0.5). |
+
+| `hatch` (a color or an object) | Meaning |
+|---|---|
+| `c`, `w`, `gap` | Line color, width (default 1) and spacing (default 4). |
+| `angle` | Degrees, 0 = horizontal (default 45). |
+| `opacity` | Default 0.5. |
+| `cross` | Cross-hatching. |
+
+Hatching fills the shape, or only its shadow when the shape has `shade`. The asset `outline`
+includes the ink. Anims take `boil: N` to redraw every ink wobble each N frames (line boil).
+`grain` can't share a shape with these; a paper texture is a full-size `rect` with `grain`,
+`blend: "multiply"` and a low `opacity` over a `bg` color.
 
 ## Structure
 

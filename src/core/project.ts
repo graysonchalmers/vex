@@ -5,10 +5,11 @@ import { type Clip, type Rig, checkClip, isRig, makeRig, sample } from "./rig.ts
 import { checkParticles, simulate } from "./vfx.ts";
 import { type LegendEntry, type LevelGrid, buildGrid, parseMap, platformer } from "./level.ts";
 import { type HatchOpts, type InkOpts, type ShadeOpts, HATCH_KEYS, INK_KEYS, SHADE_KEYS } from "./hand.ts";
+import { lsystem, noise2, turtle, tween } from "./gen.ts";
 import { arcD, points, polyD, smoothD, starD } from "./geom.ts";
 import {
   type AssetDef, type AssetKind, type AssetOpts, type FrameInfo, type GroupDef, type Grad, type Item, type Node,
-  type Paint, type Ref, type SheetDef, type ShapeNode, type Step, type Style, type UseOpts, STYLE_KEYS, isGrad, isNode, isRef,
+  type Paint, type Pat, type Ref, type SheetDef, type ShapeNode, type Step, type Style, type UseOpts, STYLE_KEYS, isGrad, isNode, isPat, isRef,
 } from "./model.ts";
 import { Palette } from "./palette.ts";
 import { type Box, serialize, svgDoc } from "./svg.ts";
@@ -24,6 +25,8 @@ const SCATTER_OPTS = USE_OPTS;
 const TILE_OPTS = [...USE_OPTS, "dx", "dy"];
 const TF_OPTS = ["x", "y", "rot", "scale", "flip", "origin", "opacity", "glow", "blur", "blend"];
 const SHEET_OPTS = ["cols", "pad", "scale"];
+const PAT_OPTS = ["w", "h", "x", "y", "rot", "scale", "opacity"];
+const IMAGE_OPTS = ["w", "h", "opacity", "pixel", "blend", "glow", "blur"];
 const BLENDS = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"];
 
 /** Shape ops: argument spec ("n" number, "s" string, "a" point list) and extra option keys. */
@@ -39,8 +42,15 @@ const SHAPES: Record<string, { args: string; extra: string[]; stroke?: boolean }
   star: { args: "cx:n cy:n points:n r1:n r2:n", extra: ["rot"] },
   ngon: { args: "cx:n cy:n sides:n r:n", extra: ["rot"] },
   arc: { args: "cx:n cy:n r:n from:n to:n", extra: ["pie"], stroke: true },
-  text: { args: "x:n y:n str:s", extra: ["size", "font", "anchor", "weight"] },
+  text: { args: "x:n y:n str:s", extra: ["size", "font", "anchor", "weight", "along", "offset", "smooth"] },
 };
+
+/** A decoded raster for image(): size and a data URI (the loader fills it in). */
+export interface ImageRef {
+  w: number;
+  h: number;
+  href: string;
+}
 
 export interface StepInfo {
   label: string;
@@ -146,6 +156,11 @@ export class Project {
   pal: Palette = Palette.builtin("sweetie16");
   /** Set by a loader to support include(). */
   includeHook?: (path: string) => void;
+  /** Set by a loader: resolves a path written in an art file (image sources) against that file. */
+  pathHook: (path: string) => string = (p) => p;
+  /** Set by a loader: reads an image file (PNG, JPEG, GIF) by its resolved path. */
+  imageHook?: (path: string) => ImageRef;
+  private images = new Map<string, ImageRef>();
 
   private cache = new Map<string, Built>();
   private building = new Set<string>();
@@ -192,7 +207,7 @@ export class Project {
       this.pal.resolve(c);
       return c;
     };
-    const paintArg = (p: unknown, what: string): Paint => (isGrad(p) ? p : color(p, what));
+    const paintArg = (p: unknown, what: string): Paint => (isGrad(p) || isPat(p) ? p : color(p, what));
     const styleArg = (v: unknown, extra: string[], strokeDefault: boolean): { style: Style; ex: Record<string, unknown> } => {
       if (v === undefined) throw new VexError(`needs a style: a color ("g") or { fill, stroke, sw, ... }`);
       if (typeof v === "string" || isGrad(v)) return { style: strokeDefault ? { stroke: paintArg(v, "stroke"), sw: 1 } : { fill: paintArg(v, "fill") }, ex: {} };
@@ -265,6 +280,45 @@ export class Project {
       if (!isPlain(o)) throw new VexError("rad(colors, { cx, cy, r })");
       checkKeys("rad", o, ["cx", "cy", "r"]);
       return { __grad: "rad", stops: stops(cs, "rad"), ...(o as { cx?: number }) };
+    });
+    env.pat = (name: unknown, o: unknown = {}): Pat => at("pat", () => {
+      if (typeof name !== "string" || !name) throw new VexError('pat("asset", { w, h, x, y, rot, scale, opacity }): a repeating asset as a fill or stroke');
+      if (!isPlain(o)) throw new VexError("pat options must be an object");
+      checkKeys("pat", o, PAT_OPTS);
+      nums("pat", o, PAT_OPTS);
+      return { __pat: true, name, ...(o as Partial<Pat>) };
+    });
+    env.noise = (x: unknown, y: unknown, seed: unknown = 0) => at("noise", () => {
+      if (typeof seed !== "number") throw new VexError("noise(x, y, seed): seed must be a number");
+      return noise2(x as number, y as number, seed);
+    });
+    env.lsystem = (spec: unknown) => at("lsystem", () => lsystem(spec));
+    env.turtle = (cmds: unknown, o?: unknown) => at("turtle", () => turtle(cmds, o));
+    env.tween = (a: unknown, b: unknown, t: unknown) => at("tween", () => tween(a, b, t));
+    env.image = (src: unknown, x: unknown, y: unknown, o: unknown = {}): ShapeNode => at("image", (loc) => {
+      if (typeof src !== "string" || !src) throw new VexError('image("file.png", x, y, { w, h, opacity, pixel, blend, glow, blur })');
+      checkArgs("image", "src:s x:n y:n", [src, x, y]);
+      if (!isPlain(o)) throw new VexError("image options must be an object");
+      checkKeys("image", o, IMAGE_OPTS);
+      nums("image", o, ["w", "h", "opacity", "blur"]);
+      if (!this.imageHook) throw new VexError("image() is not available here (no image loader)");
+      const abs = this.pathHook(src);
+      let img = this.images.get(abs);
+      if (!img) { img = this.imageHook(abs); this.images.set(abs, img); }
+      let w = o.w as number | undefined, h = o.h as number | undefined;
+      if (w === undefined && h === undefined) { w = img.w; h = img.h; }
+      else if (w === undefined) w = (h! * img.w) / img.h;
+      else if (h === undefined) h = (w * img.h) / img.w;
+      if (!(w! > 0 && h! > 0)) throw new VexError("image w and h must be > 0");
+      const attrs: Record<string, string | number> = { x: x as number, y: y as number, width: w!, height: h!, href: img.href };
+      if (o.pixel) attrs["image-rendering"] = "optimizeSpeed";
+      const style: Style = {};
+      for (const k of ["opacity", "glow", "blur"] as const) if (o[k] !== undefined) (style as Record<string, unknown>)[k] = o[k];
+      if (o.blend !== undefined) {
+        if (!BLENDS.includes(o.blend as string)) throw new VexError(`blend must be one of ${BLENDS.join(", ")}${didYouMean(String(o.blend), BLENDS)}`);
+        style.blend = o.blend as string;
+      }
+      return { k: "shape", tag: "image", attrs, style, step: { label: `image(${JSON.stringify(src.replace(/^.*[\\/]/, ""))}, ${n(x as number)}, ${n(y as number)})`, loc } };
     });
 
     const define = (kind: AssetKind, name: unknown, rest: unknown[]) => at(kind, (loc) => {
@@ -339,6 +393,11 @@ export class Project {
       if (typeof x !== "number") throw new VexError("sym(axisX, ...items): draws items plus their mirror image about x = axisX");
       return { __ref: "sym", args: [x, ...items], step: { label: `sym(${n(x)})`, loc } };
     });
+    env.radial = (count: unknown, cx: unknown, cy: unknown, ...items: unknown[]): Ref => at("radial", (loc) => {
+      if (!(Number.isInteger(count) && (count as number) >= 2) || typeof cx !== "number" || typeof cy !== "number")
+        throw new VexError("radial(count, cx, cy, ...items): the items repeated count times around (cx, cy); count is a whole number >= 2");
+      return { __ref: "radial", args: [count, cx, cy, ...items], step: { label: `radial(${count})`, loc } };
+    });
     env.clip = (mask: unknown, ...items: unknown[]): Ref => at("clip", (loc) => {
       if (!isNode(mask) && !Array.isArray(mask)) throw new VexError("clip(maskShape, ...items): the mask is a shape like circle(...) or a list of shapes");
       return { __ref: "clip", args: [mask, ...items], step: { label: "clip(…)", loc } };
@@ -370,13 +429,16 @@ export class Project {
       });
     });
     env.font = (name: unknown, o: unknown = {}) => at("font", (loc) => {
-      if (typeof name !== "string" || !isPlain(o)) throw new VexError('font("name", { family, size, weight, chars, fill, outline, outlineColor, shadow, shadowColor })');
-      const keys = ["family", "size", "weight", "chars", "fill", "outline", "outlineColor", "shadow", "shadowColor"];
+      if (typeof name !== "string" || !isPlain(o)) throw new VexError('font("name", { family, size, weight, chars, fill, outline, outlineColor, shadow, shadowColor }) or font("name", { glyphs: (ch) => "sprite", scale, spacing, baseline })');
+      const keys = ["family", "size", "weight", "chars", "fill", "outline", "outlineColor", "shadow", "shadowColor", "glyphs", "scale", "spacing", "baseline"];
       checkKeys(`font '${name}'`, o, keys);
+      if (o.glyphs !== undefined && typeof o.glyphs !== "function") throw new VexError(`font '${name}': glyphs must be a function (ch) => sprite name (or null to skip)`);
+      nums(`font '${name}'`, o, ["scale", "spacing", "baseline"]);
       const fd: FontDef = { name, family: String(o.family ?? "Open Sans"), size: Number(o.size ?? 32), weight: Number(o.weight ?? 700),
         chars: String(o.chars ?? " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"),
         fill: String(o.fill ?? "#ffffff"), outline: Number(o.outline ?? 0), outlineColor: String(o.outlineColor ?? "#000000"),
-        shadow: (o.shadow as [number, number]) ?? [0, 0], shadowColor: String(o.shadowColor ?? "#000000"), loc };
+        shadow: (o.shadow as [number, number]) ?? [0, 0], shadowColor: String(o.shadowColor ?? "#000000"),
+        glyphs: o.glyphs as FontDef["glyphs"], scale: Number(o.scale ?? 1), spacing: Number(o.spacing ?? 1), baseline: o.baseline as number | undefined, loc };
       for (const c of [fd.fill, fd.outlineColor, fd.shadowColor]) this.pal.resolve(c);
       this.fonts.push(fd);
     });
@@ -553,9 +615,9 @@ export class Project {
       h = opts.h;
       box = { x: 0, y: 0, w, h };
     }
-    if (opts.bg !== undefined) raw.push({ k: "shape", tag: "rect", attrs: { x: box.x, y: box.y, width: box.w, height: box.h }, style: { fill: opts.bg }, step: { label: "background", loc: def.loc } });
-
     const fi = frameInfo(frame, count, hash(def.name) + seed);
+    if (opts.bg !== undefined) raw.push(this.withPats({ k: "shape", tag: "rect", attrs: { x: box.x, y: box.y, width: box.w, height: box.h }, style: { fill: opts.bg }, step: { label: "background", loc: def.loc } }, fi, seed));
+
     const steps: StepInfo[] = raw.map((r, i) => ({ label: r.step!.label, loc: r.step!.loc, end: i + 1 }));
     for (const item of def.items) {
       const got = this.expand(item, def, fi, seed, 0);
@@ -603,7 +665,7 @@ export class Project {
       try { got = item(fi); } catch (e) { throw wrap(e, (s) => this.locFromStack(s)); }
       return this.expand(got, def, fi, seed, depth + 1);
     }
-    if (isNode(item)) return [item];
+    if (isNode(item)) return [item.k === "shape" ? this.withPats(item, fi, seed) : item];
     if (isRef(item)) {
       try { return this.resolve(item, def, fi, seed, depth); } catch (e) { throw wrap(e, (s) => this.locFromStack(s)).within(item.step.label, item.step.loc); }
     }
@@ -611,8 +673,32 @@ export class Project {
     throw new VexError(`item is ${what}; items are shapes, stamp/tf/clip/scatter/tile, functions (f) => items, or lists of those`, this.callerLoc());
   }
 
+  /** A shape whose pattern paints are resolved to the pattern asset's nodes (the shape itself is left as written). */
+  private withPats(s: ShapeNode, fi: FrameInfo, seed: number): ShapeNode {
+    const f = s.style.fill, k = s.style.stroke;
+    if (!(isPat(f) && !f.built) && !(isPat(k) && !k.built)) return s;
+    const res = (p: Paint | undefined): Paint | undefined => (isPat(p) && !p.built ? this.resolvePat(p, fi, seed) : p);
+    return { ...s, style: { ...s.style, fill: res(f), stroke: res(k) } };
+  }
+
+  private resolvePat(p: Pat, fi: FrameInfo, seed: number): Pat {
+    const def = this.assets.get(p.name);
+    if (!def) {
+      if (this.groups.has(p.name) || p.name.includes("*")) throw new VexError(`pat: '${p.name}' is a group/glob; a pattern repeats one asset`);
+      throw new VexError(`pat: unknown asset '${p.name}'${didYouMean(p.name, this.order)}`);
+    }
+    const frames = frameCount(def);
+    const b = this.build(p.name, frames > 1 && fi.n > 1 ? Math.round((fi.i / fi.n) * frames) : 0, seed);
+    return { ...p, built: { nodes: b.nodes, pal: b.pal, box: b.box } };
+  }
+
   private resolve(r: Ref, def: AssetDef, fi: FrameInfo, seed: number, depth: number): Node[] {
     const a = r.args;
+    if (r.__ref === "radial") {
+      const [count, cx, cy] = a as [number, number, number];
+      const kids = this.expand(a.slice(3), def, fi, seed, depth + 1);
+      return Array.from({ length: count }, (_, i): Node => (i ? { k: "g", tf: `rotate(${n((360 * i) / count)} ${n(cx)} ${n(cy)})`, children: kids } : { k: "g", children: kids }));
+    }
     if (r.__ref === "tf") {
       const o = a[0] as Record<string, unknown>;
       const [fx, fy] = flipXY(o.flip, "tf");
@@ -717,6 +803,12 @@ export interface FontDef {
   outlineColor: string;
   shadow: [number, number];
   shadowColor: string;
+  /** Glyphs drawn as sprites: the sprite name for a character, or null to skip it. */
+  glyphs?: (ch: string) => unknown;
+  /** Glyph fonts: export pixels per unit, pixels between glyphs, baseline in units from the top of the glyph box. */
+  scale: number;
+  spacing: number;
+  baseline?: number;
   loc?: string;
 }
 
@@ -757,7 +849,7 @@ export function idPrefix(name: string, frame: number): string {
   return name.replace(/[^A-Za-z0-9_-]/g, "_") + (frame ? `_f${frame}` : "") + "_";
 }
 
-function shapeGeom(name: string, a: unknown[], ex: Record<string, unknown>): Pick<ShapeNode, "tag" | "attrs" | "text"> {
+function shapeGeom(name: string, a: unknown[], ex: Record<string, unknown>): Pick<ShapeNode, "tag" | "attrs" | "text" | "along"> {
   const num = (i: number) => a[i] as number;
   switch (name) {
     case "rect": {
@@ -780,6 +872,14 @@ function shapeGeom(name: string, a: unknown[], ex: Record<string, unknown>): Pic
       const attrs: Record<string, string | number> = { x: num(0), y: num(1), "font-size": Number(ex.size ?? 8), "font-family": String(ex.font ?? "sans-serif") };
       if (ex.anchor) attrs["text-anchor"] = String(ex.anchor);
       if (ex.weight) attrs["font-weight"] = String(ex.weight);
+      if (ex.along !== undefined) {
+        // text on a path: the curve through `along`, shifted by (x, y); `offset` 0..1 is where it starts
+        const ps = points(ex.along, "text along", 2).map(([px, py]) => [px + num(0), py + num(1)] as [number, number]);
+        const offset = Number(ex.offset ?? 0);
+        if (!(offset >= 0 && offset <= 1)) throw new VexError("text offset must be 0..1 (where along the path the text starts)");
+        delete attrs.x; delete attrs.y;
+        return { tag: "text", attrs, text: a[2] as string, along: { d: smoothD(ps, false, Number(ex.smooth ?? 1)), offset } };
+      }
       return { tag: "text", attrs, text: a[2] as string };
     }
   }

@@ -6,6 +6,7 @@ import { VexError, wrap } from "../core/errors.ts";
 import { loadProject } from "./load.ts";
 import { writeOutputs } from "./output.ts";
 import { serve } from "./server.ts";
+import { traceFile } from "./trace.ts";
 
 const USAGE = `vex — 2D vector game-asset DSL
 
@@ -20,6 +21,9 @@ const USAGE = `vex — 2D vector game-asset DSL
       Render one frame to PNG; --crop (asset units) cuts out a close-up in pixel space.
   vex list  <art.vx.js>
       List assets, groups and sheets with their source locations.
+  vex trace <image.png> [--colors 32] [--smooth 0] [--name traced] [--scale S] [--out FILE.vx.js]
+      Turn an image into vex source (palette + stacked color paths) and report how closely
+      the traced art matches it. Default out: <image dir>/<image name>.vx.js.
 
 Art files may be .js or .ts. Default out dir: <art file dir>/out.`;
 
@@ -36,6 +40,9 @@ interface Args {
   frame?: number;
   scale?: number;
   crop?: { x: number; y: number; w: number; h: number };
+  colors?: number;
+  smooth?: number;
+  name?: string;
 }
 
 function parse(argv: string[]): Args {
@@ -64,6 +71,12 @@ function parse(argv: string[]): Args {
       if (c.length !== 4 || c.some((x) => !Number.isFinite(x)) || !(c[2] > 0 && c[3] > 0)) throw new VexError("--crop must be x,y,w,h in asset units");
       a.crop = { x: c[0], y: c[1], w: c[2], h: c[3] };
     }
+    else if (v === "--colors") a.colors = num(val());
+    else if (v === "--smooth") {
+      a.smooth = Number(val());
+      if (!(a.smooth >= 0 && a.smooth <= 1)) throw new VexError("--smooth must be between 0 and 1");
+    }
+    else if (v === "--name") a.name = val();
     else if (v === "--no-preview") a.preview = false;
     else if (v === "--no-grid") a.grid = false;
     else if (v === "-h" || v === "--help") a.cmd = "help";
@@ -119,6 +132,14 @@ export async function main(argv: string[]): Promise<number> {
         }
         for (const g of p.groups.values()) console.log(`${"group".padEnd(6)} ${g.name.padEnd(24)} ${g.loc ?? ""}  [${g.members.join(" ")}]`);
         for (const s of p.sheets) console.log(`${"sheet".padEnd(6)} ${s.name.padEnd(24)} ${s.loc ?? ""}`);
+        return 0;
+      }
+      case "trace": {
+        const out = typeof a.out === "string" ? resolve(a.out) : file.replace(/\.[^./]+$/, "") + ".vx.js";
+        const { traced, fit } = traceFile(file, { colors: a.colors, smooth: a.smooth, name: a.name, scale: a.scale, from: a.file });
+        writeFileSync(out, traced.source);
+        console.log(`trace ${traced.w}x${traced.h}: ${traced.colors.length} colors, ${(traced.source.length / 1024).toFixed(0)} KB -> ${out}`);
+        console.log(`fidelity: mean error ${fit.meanError.toFixed(1)}/255, ${(fit.close * 100).toFixed(1)}% of pixels within 16, ${fit.silhouetteMiss} silhouette pixels off`);
         return 0;
       }
       case "serve": {

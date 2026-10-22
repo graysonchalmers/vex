@@ -149,14 +149,19 @@ sheet("enemies", ["slime*", "slime_hop"], { scale: 2 })
 
 - **Shapes:** `rect circle ellipse poly blob curve line path star ngon arc text`. `blob` and
   `curve` pass smoothly through their points, so organic shapes take a few numbers.
-- **Paint:** palette keys and ramps, linear and radial gradients, glow, blur, procedural `grain`,
-  `blend` modes.
+- **Paint:** palette keys and ramps, linear and radial gradients, `pat()` pattern fills from any asset
+  (fabric, scales, halftone), glow, blur, procedural `grain`, `blend` modes.
+- **Mixed media:** `image()` embeds PNG / JPEG / GIF (collage, photo backdrops, pxl sprites in vector
+  scenes; the silhouette outline follows the pixels); `text` along a curve.
+- **Generative:** `noise(x, y)`, `lsystem()` + `turtle()` (plants, fractals, coral, with branch depth
+  for tapering strokes), `tween()` for shape morphing, and `radial()` symmetry (mandalas, snowflakes).
 - **Hand-drawn:** `ink` lines with weight, taper and wobble, painted `shade` from one light, `hatch`,
   and line `boil` in anims.
 - **Structure:** `tf` transform groups, `sym` mirroring, `clip` for cel shading and highlights,
   automatic silhouette `outline`.
 - **Reuse:** parts, `base` + `swap` variants, `stamp`, `tile`, `scatter`, random groups and globs.
-- **UI:** 9-slice metadata (`slice`) for Godot / Unity / Phaser and bitmap fonts (`font()`, BMFont).
+- **UI:** 9-slice metadata (`slice`) for Godot / Unity / Phaser and bitmap fonts (`font()`, BMFont),
+  from a system font or from your own glyph sprites.
 - **Particles:** `particles()` for fire, smoke, explosions, magic, hits and dust, as looping or one-shot anims.
 - **Levels:** `tileset()` + `level()` with autotiling, game objects and generated maps; Tiled .tmj / .tmx export.
 - **Skeletal animation:** `rig()` bone hierarchies with pivots and draw order, `pose()` with keyframed

@@ -15,7 +15,24 @@ export interface Grad {
   r?: number;
 }
 
-export type Paint = string | Grad;
+/** A repeating asset as a fill or stroke (an SVG pattern). */
+export interface Pat {
+  __pat: true;
+  name: string;
+  /** Tile size in units (default: the asset's box). */
+  w?: number;
+  h?: number;
+  /** Tile origin offset, rotation (degrees) and scale of the tiling. */
+  x?: number;
+  y?: number;
+  rot?: number;
+  scale?: number;
+  opacity?: number;
+  /** Filled in at build time: the asset's nodes, palette and drawn box. */
+  built?: { nodes: Node[]; pal: Palette; box: { x: number; y: number; w: number; h: number } };
+}
+
+export type Paint = string | Grad | Pat;
 
 export interface GlowOpts {
   r: number;
@@ -67,9 +84,11 @@ export interface Step {
 
 export interface ShapeNode {
   k: "shape";
-  tag: "path" | "rect" | "circle" | "ellipse" | "text";
+  tag: "path" | "rect" | "circle" | "ellipse" | "text" | "image";
   attrs: Record<string, string | number>;
   text?: string;
+  /** text: path data to lay the text along (textPath), and where along it to start (0..1). */
+  along?: { d: string; offset: number };
   style: Style;
   step?: Step;
 }
@@ -114,7 +133,7 @@ export interface FrameInfo {
 
 /** Deferred items, resolved at build time. */
 export interface Ref {
-  __ref: "stamp" | "scatter" | "tile" | "tf" | "clip" | "sym";
+  __ref: "stamp" | "scatter" | "tile" | "tf" | "clip" | "sym" | "radial";
   args: unknown[];
   step: Step;
 }
@@ -194,4 +213,8 @@ export function isRef(v: unknown): v is Ref {
 
 export function isGrad(v: unknown): v is Grad {
   return typeof v === "object" && v !== null && "__grad" in v;
+}
+
+export function isPat(v: unknown): v is Pat {
+  return typeof v === "object" && v !== null && (v as Pat).__pat === true;
 }

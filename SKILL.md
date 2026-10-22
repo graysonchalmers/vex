@@ -75,6 +75,14 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
 - **Structure**: `tf({ x, y, rot, scale, flip, origin, opacity, glow, blur }, ...items)` groups;
   `sym(x, ...items)` mirrors; `clip(maskShape, ...items)` keeps items inside a shape (shading,
   highlights, patterns on a body).
+- **Symmetry**: `sym(x, ...)` mirrors; `radial(n, cx, cy, ...)` repeats around a point (mandalas,
+  snowflakes, flowers, gears).
+- **Paint from art**: `fill: pat("dots", { w, h, rot, scale })` tiles an asset as a pattern (fabric,
+  scales, halftone); `image("photo.png", x, y, { w })` embeds a raster (collage, a pxl sprite in a vector
+  scene; `outline` follows its pixels). `text(..., { along: [points] })` writes on a curve (badges, labels).
+- **Generative**: `noise(x, y)` (flow fields, organic placement), `lsystem({ axiom, rules, depth })` +
+  `turtle(str, { x, y, step, angle, shrink })` → strokes with depth (plants, fractals, coral),
+  `tween(a, b, t)` to morph blobs between poses.
 - **Reuse**: `stamp(name, x, y, { anchor, scale, rot, flip, swap, opacity })`, `tile`, `scatter`.
   Names can be groups or globs (`group("rocks", ["rock_a", "rock_a", "rock_b"])`, `"tree_*"`);
   each placement picks reproducibly. `_name` = part: usable, never exported.
@@ -85,7 +93,8 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
   `{ bone: { rot | move | scale: [[frame, value, ease?], ...] } }`. Check the anim preview strip frame by frame:
   rotations add up along the chain (a held sword's angle is arm + forearm + sword), and a jump needs headroom.
 - **UI**: `slice: [l, t, r, b]` on a sprite exports 9-slice margins (check `_preview/<name>.9.png`: corners must
-  stay crisp); `font(name, { family, weight, size, fill, outline, shadow })` exports a BMFont (.fnt + .xml + png).
+  stay crisp); `font(name, { family, weight, size, fill, outline, shadow })` exports a BMFont (.fnt + .xml + png),
+  or `font(name, { glyphs: (ch) => spriteName, scale, baseline })` builds one from your own glyph sprites.
 - **Particles**: `particles({ at | area, rate | burst, life, speed, angle, gravity, drag, size, color, opacity, shape, glow })`
   inside an anim. Draw smoke before fire, check the strip on a dark stage too (light colors vanish on the checkerboard).
 - **Levels**: `tileset(name, { size, tiles })` + `level(name, { tileset, legend, map })`. Legend chars are tile keys,
@@ -93,6 +102,8 @@ sheet("items", ["slime*", "coin", "slime_hop"], { pad: 2, scale: 2 })
   Exports Tiled .tmj/.tmx; check `out/levels/<name>.html` and that objects stand on ground, not one row above it.
 - **Spine**: `spine(name, rig, { w, h, scale, outline, clips: { walk: { clip, frames, fps } } })` writes a Spine 4.1
   skeleton + atlas for game runtimes; check it in `out/spine/<name>.html` (served over HTTP).
+- **From an image**: `VEX trace ref.png --colors 32` writes `ref.vx.js` (palette + stacked color paths) and
+  prints how closely it matches; `--smooth 0` (default) is a 1:1 copy, higher values soften the outlines.
 - **Animation**: `anim(name, { frames, fps }, ...)`; function items `(f) => items` get `f.i`, `f.n`,
   `f.t` (0..1, loops), `f.sin(amp, phase, cycles)`, `f.cos(...)`, `f.rng(seed)`. Stamping an anim
   inside an anim follows its frames (`delay` to desync, `frame` to freeze).

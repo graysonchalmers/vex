@@ -1,7 +1,7 @@
 // Serializes resolved nodes to SVG. The only owner of color resolution: palette keys stay keys
 // through the whole build so swaps (variants, use(..., { swap })) compose, and resolve here.
 import { VexError } from "./errors.ts";
-import { type GlowOpts, type Grad, type Node, type Paint, type ShapeNode, type Style, isGrad } from "./model.ts";
+import { type GlowOpts, type Grad, type Node, type Paint, type Pat, type ShapeNode, type Style, isGrad, isPat } from "./model.ts";
 import { bounds, inkD, lightDir, linesD, outline, shapeSeed, wobbled } from "./hand.ts";
 import type { Palette } from "./palette.ts";
 import { esc, n } from "./util.ts";
@@ -73,6 +73,7 @@ class Ctx {
 /** Fill/stroke attributes for a paint; 8-digit hex splits into color + opacity for portability. */
 function paint(ctx: Ctx, attr: "fill" | "stroke", p: Paint): string {
   if (isGrad(p)) return ` ${attr}="url(#${gradient(ctx, p)})"`;
+  if (isPat(p)) return ` ${attr}="url(#${pattern(ctx, p)})"`;
   const c = ctx.color(p);
   if (c.length === 9) return ` ${attr}="${c.slice(0, 7)}" ${attr}-opacity="${n(parseInt(c.slice(7), 16) / 255)}"`;
   return ` ${attr}="${c}"`;
@@ -91,6 +92,20 @@ function gradient(ctx: Ctx, g: Grad): string {
   } else {
     ctx.defs.push(`<radialGradient id="${id}" cx="${n(g.cx ?? 0.5)}" cy="${n(g.cy ?? 0.5)}" r="${n(g.r ?? 0.5)}">${stops}</radialGradient>`);
   }
+  return id;
+}
+
+/** A repeating asset as paint: its nodes inside an SVG pattern tile of the asset's box (user space). */
+function pattern(ctx: Ctx, p: Pat): string {
+  const b = p.built;
+  if (!b) throw new VexError(`pattern '${p.name}' was not resolved before serializing`);
+  const w = p.w ?? b.box.w, h = p.h ?? b.box.h, id = ctx.id();
+  if (!(w > 0 && h > 0)) throw new VexError(`pat("${p.name}"): tile w and h must be > 0`);
+  // the tile's top-left is the asset box's top-left (which an outline moves to negative coordinates)
+  let inner = node(ctx, { k: "g", tf: b.box.x || b.box.y ? `translate(${n(-b.box.x)} ${n(-b.box.y)})` : undefined, pal: b.pal, children: b.nodes });
+  if (p.opacity !== undefined && p.opacity < 1) inner = `<g opacity="${n(p.opacity)}">${inner}</g>`;
+  const tf = [p.rot ? `rotate(${n(p.rot)})` : "", p.scale !== undefined && p.scale !== 1 ? `scale(${n(p.scale)})` : ""].filter(Boolean).join(" ");
+  ctx.defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n(p.x ?? 0)}" y="${n(p.y ?? 0)}" width="${n(w)}" height="${n(h)}"${tf ? ` patternTransform="${tf}"` : ""}>${inner}</pattern>`);
   return id;
 }
 
@@ -252,12 +267,38 @@ function dryFilter(ctx: Ctx, dry: number, seed: number): string {
   return ctx.def(body, (id) => `<filter id="${id}" x="0" y="0" width="100%" height="100%">${body}</filter>`);
 }
 
+/**
+ * A raster image: drawn as is, or, in silhouette mode, its alpha grown by `ow` and flooded with the
+ * outline color. The growth is a blur of the alpha pushed through a steep threshold (resvg ignores
+ * feMorphology): with stdDeviation = ow and the threshold at alpha ≈ 0.1, the edge moves out by ~1.3 ow.
+ */
+function image(ctx: Ctx, s: ShapeNode, attrs: string, sil?: Sil): string {
+  if (sil) {
+    const a = s.attrs as Record<string, number>, m = 3 * sil.ow + 1;
+    const body = `<feGaussianBlur in="SourceAlpha" stdDeviation="${n(sil.ow)}" result="b"/><feComponentTransfer in="b" result="d"><feFuncA type="linear" slope="40" intercept="-3.4"/></feComponentTransfer><feFlood flood-color="${ctx.color(sil.color).slice(0, 7)}"/><feComposite in2="d" operator="in"/>`;
+    const id = ctx.def(`${body}${n(a.x)},${n(a.y)},${n(a.width)},${n(a.height)}`, (id) =>
+      `<filter id="${id}" filterUnits="userSpaceOnUse" x="${n(a.x - m)}" y="${n(a.y - m)}" width="${n(a.width + 2 * m)}" height="${n(a.height + 2 * m)}">${body}</filter>`);
+    return `<image${attrs} filter="url(#${id})"/>`;
+  }
+  let a = "";
+  if (s.style.opacity !== undefined && s.style.opacity < 1) a += ` opacity="${n(s.style.opacity)}"`;
+  if (s.style.blend && s.style.blend !== "normal") a += ` style="mix-blend-mode:${s.style.blend}"`;
+  return `<image${attrs}${a}${filters(ctx, s.style)}/>`;
+}
+
 function shape(ctx: Ctx, s: ShapeNode, sil?: Sil): string {
   if (s.style.ink || s.style.shade || s.style.hatch) return hand(ctx, s, sil);
-  if (sil && s.style.fill === undefined && s.style.stroke === undefined) return "";
   const attrs = Object.entries(s.attrs).map(([k, v]) => ` ${k}="${typeof v === "number" ? n(v) : esc(v)}"`).join("");
+  if (s.tag === "image") return image(ctx, s, attrs, sil);
+  if (sil && s.style.fill === undefined && s.style.stroke === undefined) return "";
   const st = styleAttrs(ctx, s.style, sil);
-  if (s.tag === "text") return `<text${attrs}${st}>${esc(s.text ?? "")}</text>`;
+  if (s.tag === "text") {
+    if (s.along) {
+      const d = s.along.d, pid = ctx.def(`<path d="${d}"/>`, (id) => `<path id="${id}" d="${d}" fill="none"/>`);
+      return `<text${attrs}${st}><textPath href="#${pid}" startOffset="${n(s.along.offset * 100)}%">${esc(s.text ?? "")}</textPath></text>`;
+    }
+    return `<text${attrs}${st}>${esc(s.text ?? "")}</text>`;
+  }
   return `<${s.tag}${attrs}${st}/>`;
 }
 

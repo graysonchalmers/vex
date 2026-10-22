@@ -18,6 +18,7 @@ degrees, clockwise.
 | `dark(key, steps = 1)`, `lite(key, steps = 1)` | The key `steps` along its ramp (clamped). |
 | `lin(colors, angle = 90)` | Linear gradient; 0 = left → right, 90 = top → bottom. `colors`: `["w", "g"]` or `[["w", 0], ["g", 0.7]]`. |
 | `rad(colors, { cx, cy, r })` | Radial gradient; center/radius as fractions of the shape's box (default 0.5). |
+| `pat("asset", { w, h, x, y, rot, scale, opacity })` | A repeating asset as a fill or stroke (an SVG pattern): fabric prints, scales, halftones, wallpaper. The tile is the asset's box (`w`, `h` override it, in units); `x`, `y` shift the tiling, `rot` and `scale` transform it. Works for `bg` too. Anims used as patterns follow the frame. |
 
 Colors anywhere: a palette key, `"#rgb"`, `"#rgba"`, `"#rrggbb"`, `"#rrggbbaa"`, `"none"`.
 Every asset keeps the palette active where it was defined, so included files with different
@@ -80,7 +81,8 @@ The last argument is the style: a color (fill; stroke for `line`, `curve`, `arc`
 | `star(cx, cy, points, r1, r2, style)` | Outer radius r1, inner r2; first point up; `rot`. |
 | `ngon(cx, cy, sides, r, style)` | Regular polygon; `rot`. |
 | `arc(cx, cy, r, from, to, style)` | 0 = up, clockwise; `pie: true` closes through the center (fill it). |
-| `text(x, y, str, style)` | `size` (8), `font` ("sans-serif"), `anchor` ("start" \| "middle" \| "end"), `weight`. Uses system fonts. |
+| `text(x, y, str, style)` | `size` (8), `font` ("sans-serif"), `anchor` ("start" \| "middle" \| "end"), `weight`. Uses system fonts. `along: [x0, y0, x1, y1, ...]` lays the text along the smooth curve through those points (shifted by `x`, `y`; `smooth: 0` for straight segments), `offset` 0..1 where along it the text starts: badges, arcs, labels on paths. |
+| `image(src, x, y, { w, h, opacity, pixel, blend, glow, blur })` | A raster image (PNG, JPEG or GIF, path relative to the art file) at its own size or scaled to `w` and/or `h` (one keeps the aspect). `pixel: true` keeps pixel art crisp. Collage, photo backgrounds, pxl sprites in vector scenes. The asset `outline` wraps the image's opaque pixels, not its box. |
 
 ### Style object
 
@@ -145,6 +147,7 @@ includes the ink. Anims take `boil: N` to redraw every ink wobble each N frames 
 |---|---|
 | `tf({ x, y, rot, scale, flip, origin, opacity, glow, blur }, ...items)` | Group with a transform; `scale` may be `[sx, sy]`; `rot`/`scale`/`flip` pivot on `origin` (local coords, default `[0, 0]`). |
 | `sym(axisX, ...items)` | Items plus their mirror image about x = axisX (eyes, ears, wings). |
+| `radial(count, cx, cy, ...items)` | The items repeated `count` times around (cx, cy), 360 / count degrees apart: mandalas, snowflakes, gears, flowers, kaleidoscopes (nest `sym` inside for mirrored segments). |
 | `clip(mask, ...items)` | Items clipped to the mask shape (or list of shapes). Mask style is ignored. |
 
 ## Reuse
@@ -154,6 +157,24 @@ includes the ink. Anims take `boil: N` to redraw every ink wobble each N frames 
 | `stamp(name, x, y, opts?)` | Place an asset. `anchor`: `[ax, ay]` fractions of its box, `"center"`, `"bottom"`, `"top"` (default `[0, 0]` = top-left). `scale` (number or `[sx, sy]`), `rot`, `flip` pivot on the anchor. `swap`, `opacity`, `seed` (reroll its random picks). Anims: `frame` freezes one frame, `delay` offsets. |
 | `tile(name, x, y, cols, rows, opts?)` | Grid of copies; `dx`, `dy` spacing (default the asset size) + stamp options. |
 | `scatter(name, x, y, w, h, count, opts?)` | Random copies inside the area, reproducible. Anchor defaults to `"center"`. `scale` and `rot` take `[min, max]`; `flip: "x"` flips half of them at random. Copies of anims get increasing `delay`. |
+
+## Generative
+
+Plain functions for algorithmic art, all deterministic for a seed:
+
+| Call | Meaning |
+|---|---|
+| `noise(x, y, seed = 0)` | Smooth 2D gradient noise, -1..1 (0 on whole coordinates): flow fields, organic placement, terrain lines, wobble. Scale the inputs (`noise(x / 40, y / 40)`) to set the feature size. |
+| `lsystem({ axiom, rules, depth = 3, seed })` | Rewrite the axiom `depth` times with the rules (`{ F: "F[+F]F[-F]F" }`; a list of strings is picked at random per use, for stochastic plants). Returns the string. |
+| `turtle(cmds, { x, y, heading = -90, angle = 25, step = 10, shrink = 1, wobble = 0, seed })` | Walk a command string: `F` `G` draw forward, `f` moves, `+` `-` turn right / left by `angle`, `[` `]` push / pop (branches; each `[` multiplies the step by `shrink`), `\|` turns around; other symbols are ignored. Returns `[{ pts, depth }]`: one flat point list per stroke with its branch depth, ready for `line` / `curve` (`sw` from `depth` tapers a tree). |
+| `tween(ptsA, ptsB, t)` | Interpolate two point lists of the same length (0 = A, 1 = B): morph a `blob` between poses over `f.t`. |
+
+```js
+const t = turtle(lsystem({ axiom: "F", rules: { F: ["F[+F]F[-F]F", "F[+F]F", "F[-F]F"] }, depth: 4, seed: 3 }), { x: 60, y: 118, step: 5, angle: 24, shrink: 0.92, wobble: 4 })
+sprite("tree", { w: 120, h: 120 }, t.map((s) => curve(s.pts, { stroke: "k", sw: Math.max(0.6, 3.5 - s.depth), cap: "round" })))
+sprite("mandala", { w: 120, h: 120 }, radial(12, 60, 60, blob([60, 8, 66, 30, 60, 56, 54, 30], { fill: rad(["w", "g"]), opacity: 0.8 })))
+anim("blobby", { w: 60, h: 60, frames: 24 }, (f) => blob(tween(A, B, (1 - f.cos()) / 2), "g"))   // A and B: same-length point lists
+```
 
 ## Skeletal animation
 
@@ -199,6 +220,12 @@ font("title", { family: "Open Sans", weight: 800, size: 48, fill: "gd2", outline
 (`.xml`, what Phaser, libGDX and most engines load). Options: `family`, `weight`, `size` (px), `fill`,
 `outline` + `outlineColor`, `shadow` `[dx, dy]` + `shadowColor`. Glyphs are rendered from the installed
 font (found with fontconfig when available), so the font must be installed when you build.
+
+**Fonts from your own art**: `font("hand", { glyphs: (ch) => "g_" + ch.charCodeAt(0), chars: "ABC…", scale: 2, spacing: 1, baseline: 14 })`
+builds the BMFont from sprites instead: `glyphs` maps a character to the sprite that draws it (null skips
+it), `scale` is the export pixels per unit, `spacing` the pixels added after each glyph, `baseline` the
+baseline in units from the top of the glyph box (default: its bottom), so descenders can hang below it.
+Draw glyphs in one loop with `sym`, `ink` or `outline` like any sprite and the engine types with them.
 
 ## Particles (VFX)
 
@@ -277,6 +304,17 @@ separately (cutout style). The skeleton origin is the bottom center of `w × h` 
 | `out/anims/<name>/<i>.svg` | One SVG per frame. |
 | `out/<sheet>.png` + `.json` | Atlas; anims expand to `name_0, name_1, ...` with a frame tag. |
 | `out/_preview/<name>.png` | Preview: checkerboard, grid, unit rulers; anims: all frames side by side. |
+
+## Tracing an image
+
+`vex trace image.png [--colors 32] [--smooth 0] [--name traced] [--scale S] [--out FILE.vx.js]` turns a PNG,
+JPEG or GIF into vex source: the image is reduced to `--colors` palette keys (`c00`, dark, up to the lightest),
+and each key becomes one `path` layer covering every pixel at least that light, so layers nest and no seams
+open between colors. `--smooth 0` keeps exact pixel edges (a 1:1 copy at the source resolution); up to `1`
+rounds and simplifies the outlines for a softer, painted read at larger scales. The command renders the
+result and prints its fidelity (mean color error, share of pixels within 16 per channel, silhouette pixels
+off), so the copy is checked, not assumed. The output is an ordinary art file: recolor keys with `pal`,
+stamp the sprite, or cut it into rig bones.
 
 `vex svg art.vx.js <name> [--frame N]` prints one SVG. `vex list art.vx.js` lists assets.
 `vex serve art.vx.js [--port 4322] [--no-out]` runs the live viewer.

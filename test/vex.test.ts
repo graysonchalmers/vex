@@ -383,3 +383,40 @@ test("hand: errors name the problem", () => {
   bad(`{ fill: "1", ink: "0" }`, /not text/, `text(1, 5, "hi", `);
   throwsMsg(() => loadSource(`anim("a", { w: 4, h: 4, boil: 0.5 }, circle(2, 2, 2, "1"))`), /boil must be a whole number/);
 });
+
+test("trace rebuilds an image exactly at smooth 0: holes stay open, diagonal touches stay apart", async () => {
+  const { trace } = await import("../src/core/trace.ts");
+  // 6x6: a red ring around a transparent hole, a blue pixel inside a gap, two greens touching diagonally
+  const rows = [
+    "rrrrr.",
+    "r...rg",
+    "r.b.g.",
+    "r...r.",
+    "rrrrr.",
+    "......",
+  ];
+  const C: Record<string, number[]> = { r: [200, 40, 40, 255], g: [40, 200, 60, 255], b: [30, 60, 220, 255], ".": [0, 0, 0, 0] };
+  const w = 6, h = 6, rgba = new Uint8Array(w * h * 4);
+  rows.forEach((row, y) => [...row].forEach((ch, x) => rgba.set(C[ch], (y * w + x) * 4)));
+  const t = trace(w, h, rgba, { colors: 3, name: "t" });
+  assert.equal(t.colors.length, 3);
+  const r = new Resvg(loadSource(t.source).svg("t", 0, 1)).render();
+  for (let i = 0; i < w * h; i++) {
+    const a = r.pixels[i * 4 + 3];
+    assert.equal(a > 128, rgba[i * 4 + 3] > 0, `pixel ${i % w},${Math.floor(i / w)} coverage`);
+    if (a > 128) for (let c = 0; c < 3; c++) assert.ok(Math.abs(r.pixels[i * 4 + c] - rgba[i * 4 + c]) <= 1, `pixel ${i} channel ${c}`);
+  }
+});
+
+test("trace decodes premultiplied pixels back to straight color", async () => {
+  const { readImage } = await import("../src/node/trace.ts");
+  const dir = mkdtempSync(join(tmpdir(), "vex-trace-"));
+  try {
+    // a 1x1 PNG at half alpha, rendered by resvg itself
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="#c86432" fill-opacity="0.5"/></svg>`;
+    writeFileSync(join(dir, "a.png"), new Resvg(svg).render().asPng());
+    const img = readImage(join(dir, "a.png"));
+    assert.deepEqual([img.w, img.h], [1, 1]);
+    for (const [i, v] of [0xc8, 0x64, 0x32].entries()) assert.ok(Math.abs(img.rgba[i] - v) <= 2, `channel ${i}`);
+  } finally { rmSync(dir, { recursive: true }); }
+});

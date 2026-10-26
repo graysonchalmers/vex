@@ -17,3 +17,7 @@ sprite("lantern_post_icon", { w: 64, h: 64 },
   circle(40, 30, 16, { fill: "Y", opacity: 0.18, blur: 6 }), ...LANTERN_POST_ART)
 // item: same art without the tile, outlined and zoomed to fill an inventory slot
 sprite("lantern_post_item", { w: 64, h: 64, outline: "#1a2014", ow: 1.5 }, tf({ scale: 1.15, origin: [32, 6] }, ...LANTERN_POST_ART))
+// selected-slot animation: same item art plus a small loop
+anim("lantern_post_item_anim", { w: 64, h: 64, frames: 8, fps: 8, outline: "#1a2014", ow: 1.5 },
+  (f) => tf({ scale: 1.15, origin: [32, 6] }, ...LANTERN_POST_ART,
+    rect(37, 22, 6, 9, { fill: "y", r: 1, opacity: 0.4 + f.sin(0.35, 0, 2) + f.sin(0.2, 0.5, 3) })))

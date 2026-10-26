@@ -13,3 +13,6 @@ sprite("mangrove_icon", { w: 64, h: 64 },
   rect(2, 2, 60, 60, { fill: lin(["bg", "bgD"], 90), r: 12 }), ...MANGROVE_ART)
 // item: same art without the tile, outlined and zoomed to fill an inventory slot
 sprite("mangrove_item", { w: 64, h: 64, outline: "#1a2014", ow: 1.5 }, tf({ scale: 1.15, origin: [32, 6] }, ...MANGROVE_ART))
+// selected-slot animation: same item art plus a small loop
+anim("mangrove_item_anim", { w: 64, h: 64, frames: 8, fps: 8, outline: "#1a2014", ow: 1.5 },
+  (f) => tf({ scale: 1.15, origin: [32, 6] }, ...MANGROVE_ART.slice(0, -7), tf({ rot: f.sin(4), origin: [32, 38] }, ...MANGROVE_ART.slice(-7))))

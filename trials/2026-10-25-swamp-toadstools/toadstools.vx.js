@@ -19,3 +19,7 @@ sprite("glow_toadstools_icon", { w: 64, h: 64 },
   circle(32, 28, 20, { fill: "e", opacity: 0.12, blur: 6 }), ...GLOW_TOADSTOOLS_ART)
 // item: same art without the tile, outlined and zoomed to fill an inventory slot
 sprite("glow_toadstools_item", { w: 64, h: 64, outline: "#1a2014", ow: 1.5 }, tf({ scale: 1.15, origin: [32, 6] }, ...GLOW_TOADSTOOLS_ART))
+// selected-slot animation: same item art plus a small loop
+anim("glow_toadstools_item_anim", { w: 64, h: 64, frames: 8, fps: 8, outline: "#1a2014", ow: 1.5 },
+  (f) => tf({ scale: [1.15, 1.15 * (1 + f.sin(0.025))], origin: [32, 53] }, ...GLOW_TOADSTOOLS_ART,
+    ellipse(28.5, 25, 3, 1.2, { fill: "e", opacity: 0.5 + f.sin(0.45) })))

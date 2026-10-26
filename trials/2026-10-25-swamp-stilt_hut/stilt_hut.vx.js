@@ -19,3 +19,7 @@ sprite("stilt_hut_icon", { w: 64, h: 64 },
   rect(2, 2, 60, 60, { fill: lin(["bg", "bgD"], 90), r: 12 }), ...STILT_HUT_ART)
 // item: same art without the tile, outlined and zoomed to fill an inventory slot
 sprite("stilt_hut_item", { w: 64, h: 64, outline: "#1a2014", ow: 1.5 }, tf({ scale: 1.15, origin: [32, 6] }, ...STILT_HUT_ART))
+// selected-slot animation: same item art plus a small loop
+anim("stilt_hut_item_anim", { w: 64, h: 64, frames: 8, fps: 8, outline: "#1a2014", ow: 1.5 },
+  (f) => tf({ scale: 1.15, origin: [32, 6] }, ...STILT_HUT_ART,
+    rect(34, 25, 8, 6, { fill: "y", r: 1, opacity: 0.35 + f.sin(0.3) + f.sin(0.15, 0.3, 3) })))

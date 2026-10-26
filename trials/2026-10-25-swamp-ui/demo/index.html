@@ -51,6 +51,9 @@ canvas#title { display: block; max-width: 100%; height: auto; }
   background: none; cursor: pointer; display: grid; place-items: center; transition: transform .12s, filter .12s; }
 .slot img { width: 50px; height: 50px; margin: -7px; object-fit: contain; pointer-events: none; }
 .kit.px .slot img { image-rendering: pixelated; width: 48px; height: 48px; margin: -6px; }  /* 24px art at exactly 2x */
+.slot img.strip { object-fit: cover; object-position: 0 0; animation: strip 1s steps(8) infinite; }  /* vex anim strip, 8 frames */
+@keyframes strip { to { object-position: 114.2857% 0; } }
+@media (prefers-reduced-motion: reduce) { .slot img.strip { animation: none; } }
 .slot:hover { filter: brightness(1.2); transform: translateY(-2px); }
 .slot[aria-pressed=true] { filter: drop-shadow(0 0 6px var(--glow)) brightness(1.15); transform: translateY(-2px); }
 .slot:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; }
@@ -135,11 +138,11 @@ $("title-in").addEventListener("input", drawTitle)
 
 // inventory: vex item icons (no tile) in vector style, cropped pxl item sprites in pixel style
 const slots = [...document.querySelectorAll(".slot")]
-// pixel style: 24x24 items; the selected one spins (pxl turntables made from kiln orbits; lantern hand-faked)
+// selected slot animates: vector plays its vex anim strip, pixel style spins (24x24 items) (pxl turntables made from kiln orbits; lantern hand-faked)
 let style = "vx"
 
 const setIcons = (cls = style) => slots.forEach((s) => { const i = s.querySelector("img"), sel = s.getAttribute("aria-pressed") === "true"
-  i.src = cls === "px" ? `a/items/px_${s.dataset.item}_${sel ? "spin24.gif" : "item24.png"}` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
+  i.src = cls === "px" ? `a/items/px_${s.dataset.item}_${sel ? "spin24.gif" : "item24.png"}` : `a/items/${s.dataset.item}_item${sel ? "_anim" : ""}.png`; i.classList.toggle("strip", cls !== "px" && sel); i.alt = s.dataset.name; s.title = s.dataset.name })
 setIcons("vx")
 for (const s of slots) {
   s.addEventListener("pointerenter", () => play("hover"))

@@ -10,9 +10,12 @@ const shroom = (x, base, h, r) => [
   ellipse(x - r * 0.35, base - h - r * 0.75, r * 0.22, r * 0.1, { fill: "e", opacity: 0.8 }),
 ]
 
-sprite("glow_toadstools_icon", { w: 64, h: 64 },
-  rect(2, 2, 60, 60, { fill: rad(["bg", "bgD"], { cy: 0.4, r: 0.7 }), r: 12 }),
-  circle(32, 28, 20, { fill: "e", opacity: 0.12, blur: 6 }),
+const GLOW_TOADSTOOLS_ART = [
   ellipse(32, 51, 22, 5, "g"),
   shroom(46, 51, 9, 7), shroom(18, 52, 7, 7), shroom(32, 51, 16, 12), shroom(25, 53, 4, 3.5),
-  circle(42, 16, 1.2, { fill: "e", glow: 2 }), circle(22, 22, 0.9, { fill: "e", glow: 2 }))
+  circle(42, 16, 1.2, { fill: "e", glow: 2 }), circle(22, 22, 0.9, { fill: "e", glow: 2 })]
+sprite("glow_toadstools_icon", { w: 64, h: 64 },
+  rect(2, 2, 60, 60, { fill: rad(["bg", "bgD"], { cy: 0.4, r: 0.7 }), r: 12 }),
+  circle(32, 28, 20, { fill: "e", opacity: 0.12, blur: 6 }), ...GLOW_TOADSTOOLS_ART)
+// item: same art without the tile, outlined and zoomed to fill an inventory slot
+sprite("glow_toadstools_item", { w: 64, h: 64, outline: "#1a2014", ow: 1.5 }, tf({ scale: 1.15, origin: [32, 6] }, ...GLOW_TOADSTOOLS_ART))

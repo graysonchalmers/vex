@@ -49,7 +49,7 @@ canvas#title { display: block; max-width: 100%; height: auto; }
 .inv { display: flex; flex-wrap: wrap; gap: 8px; }
 .slot { box-sizing: border-box; width: 64px; height: 64px; padding: 0; border-style: solid; border-width: 14px; border-image: var(--slot) var(--slot-m) fill / var(--slot-w) stretch;
   background: none; cursor: pointer; display: grid; place-items: center; transition: transform .12s, filter .12s; }
-.slot img { width: 40px; height: 40px; margin: -10px; object-fit: contain; pointer-events: none; }
+.slot img { width: 50px; height: 50px; margin: -7px; object-fit: contain; pointer-events: none; }
 .kit.px .slot img { image-rendering: pixelated; }
 .slot:hover { filter: brightness(1.2); transform: translateY(-2px); }
 .slot[aria-pressed=true] { filter: drop-shadow(0 0 6px var(--glow)) brightness(1.15); transform: translateY(-2px); }
@@ -91,10 +91,10 @@ canvas#title { display: block; max-width: 100%; height: auto; }
           <div class="row"><span>Health</span><div class="bar" id="hp-bar"><div class="fill hp" id="hp-fill"></div></div><span id="hp-v">72</span></div>
           <div class="row"><span>Stamina</span><div class="bar"><div class="fill st" id="st-fill"></div></div><span id="st-v">45</span></div>
           <div class="inv" id="inv" role="group" aria-label="Inventory">
-            <button class="slot" type="button" data-item="glow_toadstools" data-name="Glow toadstools" aria-pressed="true"><img src="a/items/glow_toadstools.png" alt="Glow toadstools"></button>
-            <button class="slot" type="button" data-item="stilt_hut" data-name="Stilt hut" aria-pressed="false"><img src="a/items/stilt_hut.png" alt="Stilt hut"></button>
-            <button class="slot" type="button" data-item="mangrove" data-name="Mangrove" aria-pressed="false"><img src="a/items/mangrove.png" alt="Mangrove"></button>
-            <button class="slot" type="button" data-item="lantern_post" data-name="Lantern post" aria-pressed="false"><img src="a/items/lantern_post.png" alt="Lantern post"></button>
+            <button class="slot" type="button" data-item="glow_toadstools" data-name="Glow toadstools" aria-pressed="true"><img src="a/items/glow_toadstools_item.png" alt="Glow toadstools"></button>
+            <button class="slot" type="button" data-item="stilt_hut" data-name="Stilt hut" aria-pressed="false"><img src="a/items/stilt_hut_item.png" alt="Stilt hut"></button>
+            <button class="slot" type="button" data-item="mangrove" data-name="Mangrove" aria-pressed="false"><img src="a/items/mangrove_item.png" alt="Mangrove"></button>
+            <button class="slot" type="button" data-item="lantern_post" data-name="Lantern post" aria-pressed="false"><img src="a/items/lantern_post_item.png" alt="Lantern post"></button>
           </div>
           <div class="btns">
             <button class="btn" id="b-rest" type="button">Rest by the lantern</button>
@@ -133,9 +133,9 @@ function drawTitle() {
 }
 $("title-in").addEventListener("input", drawTitle)
 
-// inventory: vex icons in vector style, pxl sprites in pixel style
+// inventory: vex item icons (no tile) in vector style, pxl sprites in pixel style
 const slots = [...document.querySelectorAll(".slot")]
-const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = `a/items/${cls === "px" ? "px_" : ""}${s.dataset.item}.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
+const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = cls === "px" ? `a/items/px_${s.dataset.item}.png` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
 setIcons("vx")
 for (const s of slots) {
   s.addEventListener("pointerenter", () => play("hover"))

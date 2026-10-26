@@ -46,16 +46,24 @@ canvas#title { display: block; max-width: 100%; height: auto; }
 .btn:active, .btn.pressed { border-image-source: var(--btn-p); padding-top: 4px; padding-bottom: 0; }
 .btn.danger { border-image-source: var(--btn-d); }
 .btn:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; }
+.inv { display: flex; flex-wrap: wrap; gap: 8px; }
+.slot { box-sizing: border-box; width: 64px; height: 64px; padding: 0; border-style: solid; border-width: 14px; border-image: var(--slot) var(--slot-m) fill / var(--slot-w) stretch;
+  background: none; cursor: pointer; display: grid; place-items: center; transition: transform .12s, filter .12s; }
+.slot img { width: 40px; height: 40px; margin: -10px; object-fit: contain; pointer-events: none; }
+.kit.px .slot img { image-rendering: pixelated; }
+.slot:hover { filter: brightness(1.2); transform: translateY(-2px); }
+.slot[aria-pressed=true] { filter: drop-shadow(0 0 6px var(--glow)) brightness(1.15); transform: translateY(-2px); }
+.slot:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; }
 .toast { font: 13px var(--mono); color: var(--glow); min-height: 1.5em; }
 @media (prefers-reduced-motion: reduce) { .fill { transition: none; } .bar.low .fill.hp { animation: none; } }
 
 /* asset sets (margins in source pixels; draw widths in CSS px) */
 .kit.vx { --panel: url(a/vex/ui_panel.png); --panel-m: 36; --panel-w: 24px;
   --btn: url(a/vex/ui_button.png); --btn-h: url(a/vex/ui_button_hover.png); --btn-p: url(a/vex/ui_button_pressed.png); --btn-d: url(a/vex/ui_button_danger.png); --btn-m: 24; --btn-w: 16px;
-  --frame: url(a/vex/ui_bar_frame.png); --frame-m: 18; --frame-w: 12px; --hp: url(a/vex/ui_bar_hp.png); --st: url(a/vex/ui_bar_stamina.png); --fill-m: 9; --fill-w: 6px; }
+  --frame: url(a/vex/ui_bar_frame.png); --frame-m: 18; --frame-w: 12px; --hp: url(a/vex/ui_bar_hp.png); --st: url(a/vex/ui_bar_stamina.png); --fill-m: 9; --fill-w: 6px; --slot: url(a/vex/ui_slot.png); --slot-m: 18; --slot-w: 14px; }
 .kit.px { --panel: url(a/pxl/px_panel.png); --panel-m: 8; --panel-w: 24px;
   --btn: url(a/pxl/px_button.png); --btn-h: url(a/pxl/px_button_hover.png); --btn-p: url(a/pxl/px_button_pressed.png); --btn-d: url(a/pxl/px_button_danger.png); --btn-m: 6; --btn-w: 18px;
-  --frame: url(a/pxl/px_bar_frame.png); --frame-m: 4; --frame-w: 12px; --hp: url(a/pxl/px_bar_hp.png); --st: url(a/pxl/px_bar_stamina.png); --fill-m: 2; --fill-w: 6px; }
+  --frame: url(a/pxl/px_bar_frame.png); --frame-m: 4; --frame-w: 12px; --hp: url(a/pxl/px_bar_hp.png); --st: url(a/pxl/px_bar_stamina.png); --fill-m: 2; --fill-w: 6px; --slot: url(a/pxl/px_slot.png); --slot-m: 5; --slot-w: 14px; }
 </style>
 
 <div class="wrap">
@@ -82,6 +90,12 @@ canvas#title { display: block; max-width: 100%; height: auto; }
           <canvas id="title" width="10" height="10" aria-label="Panel title"></canvas>
           <div class="row"><span>Health</span><div class="bar" id="hp-bar"><div class="fill hp" id="hp-fill"></div></div><span id="hp-v">72</span></div>
           <div class="row"><span>Stamina</span><div class="bar"><div class="fill st" id="st-fill"></div></div><span id="st-v">45</span></div>
+          <div class="inv" id="inv" role="group" aria-label="Inventory">
+            <button class="slot" type="button" data-item="glow_toadstools" data-name="Glow toadstools" aria-pressed="true"><img src="a/items/glow_toadstools.png" alt="Glow toadstools"></button>
+            <button class="slot" type="button" data-item="stilt_hut" data-name="Stilt hut" aria-pressed="false"><img src="a/items/stilt_hut.png" alt="Stilt hut"></button>
+            <button class="slot" type="button" data-item="mangrove" data-name="Mangrove" aria-pressed="false"><img src="a/items/mangrove.png" alt="Mangrove"></button>
+            <button class="slot" type="button" data-item="lantern_post" data-name="Lantern post" aria-pressed="false"><img src="a/items/lantern_post.png" alt="Lantern post"></button>
+          </div>
           <div class="btns">
             <button class="btn" id="b-rest" type="button">Rest by the lantern</button>
             <button class="btn" id="b-wade" type="button">Wade</button>
@@ -119,9 +133,18 @@ function drawTitle() {
 }
 $("title-in").addEventListener("input", drawTitle)
 
+// inventory: vex icons in vector style, pxl sprites in pixel style
+const slots = [...document.querySelectorAll(".slot")]
+const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = `a/items/${cls === "px" ? "px_" : ""}${s.dataset.item}.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
+setIcons("vx")
+for (const s of slots) {
+  s.addEventListener("pointerenter", () => play("hover"))
+  s.addEventListener("click", () => { slots.forEach((o) => o.setAttribute("aria-pressed", o === s)); play("click"); toast(`Selected: ${s.dataset.name}`) })
+}
+
 // style toggle
 for (const [id, cls] of [["st-vx", "vx"], ["st-px", "px"]]) $(id).addEventListener("click", () => {
-  $("kit").className = "kit " + cls; $("st-vx").setAttribute("aria-pressed", cls === "vx"); $("st-px").setAttribute("aria-pressed", cls === "px"); play("click")
+  $("kit").className = "kit " + cls; setIcons(cls);$("st-vx").setAttribute("aria-pressed", cls === "vx"); $("st-px").setAttribute("aria-pressed", cls === "px"); play("click")
 })
 
 // panel width

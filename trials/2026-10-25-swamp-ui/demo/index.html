@@ -135,9 +135,9 @@ $("title-in").addEventListener("input", drawTitle)
 
 // inventory: vex item icons (no tile) in vector style, cropped pxl item sprites in pixel style
 const slots = [...document.querySelectorAll(".slot")]
-// pixel style: the selected slot plays its pxl idle GIF; mangrove and lantern spin (fake-3D turntables)
+// pixel style: the selected slot spins (fake-3D pxl turntables made from kiln orbits; lantern hand-faked)
 let style = "vx"
-const SPIN = { mangrove: "a/items/px_mangrove_turntable.gif", lantern_post: "a/items/px_lantern_post_turntable.gif" }
+const SPIN = Object.fromEntries(["glow_toadstools", "stilt_hut", "mangrove", "lantern_post"].map((n) => [n, `a/items/px_${n}_turntable.gif`]))
 const setIcons = (cls = style) => slots.forEach((s) => { const i = s.querySelector("img"), sel = s.getAttribute("aria-pressed") === "true"
   i.src = cls === "px" ? (sel && SPIN[s.dataset.item]) || `a/items/px_${s.dataset.item}_item${sel ? "_idle.gif" : ".png"}` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
 setIcons("vx")

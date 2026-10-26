@@ -114,6 +114,9 @@ canvas#title { display: block; max-width: 100%; height: auto; }
 <script>
 const $ = (id) => document.getElementById(id)
 const S = {}; for (const n of ["hover", "click", "confirm", "cancel", "notify", "low"]) { S[n] = new Audio(`a/sfx/ui_${n}.wav`); S[n].preload = "auto" }
+// item sounds from the per-asset chirp trials
+const ITEM_SFX = { glow_toadstools: "toadstool_squish", stilt_hut: "door_creak", mangrove: "leaf_rustle", lantern_post: "chain_clink" }
+for (const n of Object.values(ITEM_SFX)) { S[n] = new Audio(`a/sfx/${n}.wav`); S[n].preload = "auto" }
 const play = (n) => { if (!$("sound").checked) return; const a = S[n].cloneNode(); a.volume = 0.8; a.play().catch(() => {}) }
 
 // bitmap font: parse BMFont text, draw the title into a canvas
@@ -146,7 +149,7 @@ const setIcons = (cls = style) => slots.forEach((s) => { const i = s.querySelect
 setIcons("vx")
 for (const s of slots) {
   s.addEventListener("pointerenter", () => play("hover"))
-  s.addEventListener("click", () => { slots.forEach((o) => o.setAttribute("aria-pressed", o === s)); setIcons(); play("click"); toast(`Selected: ${s.dataset.name}`) })
+  s.addEventListener("click", () => { slots.forEach((o) => o.setAttribute("aria-pressed", o === s)); setIcons(); play(ITEM_SFX[s.dataset.item]); toast(`Selected: ${s.dataset.name} · ${ITEM_SFX[s.dataset.item].replace("_", " ")}`) })
 }
 
 // style toggle

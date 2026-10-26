@@ -1,0 +1,148 @@
+<title>Swamp UI Kit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: one bog-night stage. Controls on the left drive a live, resizable HUD built only from the generated assets. */
+:root {
+  --bog: #141c17; --moss: #22302a; --reed: #c9c4a6; --dim: #8f9a88; --glow: #9fe8c8; --amber: #ffc860;
+  --display: "Fraunces", Georgia, serif; --body: "Atkinson Hyperlegible", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+body { background: var(--bog); color: var(--reed); font: 15px/1.5 var(--body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 40px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 24px; }
+header h1 { font: 600 clamp(28px, 5vw, 40px)/1.1 var(--display); margin: 0; color: var(--reed); text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--dim); max-width: 62ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.controls { display: grid; gap: 16px; background: var(--moss); border-radius: 6px; padding: 16px; }
+.controls label { display: grid; gap: 4px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+.controls output { font: 13px var(--mono); color: var(--reed); font-variant-numeric: tabular-nums; }
+.controls input[type=range], .controls input[type=text] { width: 100%; accent-color: var(--glow); }
+.controls input[type=text] { box-sizing: border-box; background: var(--bog); color: var(--reed); border: 1px solid #3a4a40; border-radius: 4px; padding: 6px 8px; font: 15px var(--body); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #3a4a40; border-radius: 4px; overflow: hidden; }
+.seg button { background: transparent; color: var(--dim); border: 0; padding: 8px; font: 700 13px var(--body); cursor: pointer; }
+.seg button[aria-pressed=true] { background: var(--glow); color: var(--bog); }
+.note { font: 12px/1.5 var(--mono); color: var(--dim); margin: 0; }
+.stage { min-width: 0; overflow: auto; padding: 8px; }
+
+/* Kit pieces: every edge below is a generated 9-slice PNG stretched by border-image. */
+.kit { --s: 1; }
+.panel { box-sizing: border-box; width: var(--pw, 520px); max-width: 100%; min-width: 200px; min-height: 220px; display: grid; gap: 14px; align-content: start;
+  border-style: solid; border-width: 24px; border-image: var(--panel) var(--panel-m) fill / var(--panel-w) stretch; padding: 4px; resize: both; overflow: hidden; color: #f4f0de; }
+.kit.px .panel, .kit.px .btn, .kit.px .bar, .kit.px .fill { image-rendering: pixelated; }
+canvas#title { display: block; max-width: 100%; height: auto; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 44px; align-items: center; gap: 10px; font: 700 14px var(--body); text-shadow: 0 1px 0 #000; }
+.row span:last-child { font: 13px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.bar { box-sizing: border-box; height: 30px; border-style: solid; border-width: 12px; border-image: var(--frame) var(--frame-m) fill / var(--frame-w) stretch; padding: 0; position: relative; }
+.fill { position: absolute; inset: -6px auto -6px -6px; box-sizing: border-box; border-style: solid; border-width: 6px; min-width: 12px; transition: width .35s cubic-bezier(.2,.8,.2,1); }
+.fill.hp { border-image: var(--hp) var(--fill-m) fill / var(--fill-w) stretch; }
+.fill.st { border-image: var(--st) var(--fill-m) fill / var(--fill-w) stretch; }
+.bar.low .fill.hp { animation: pulse .6s ease-in-out infinite alternate; }
+@keyframes pulse { to { filter: brightness(1.5) saturate(1.3); } }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { box-sizing: border-box; min-height: 52px; padding: 0 6px 4px; border-style: solid; border-width: 16px; border-image: var(--btn) var(--btn-m) fill / var(--btn-w) stretch;
+  background: none; color: #f4f0de; font: 700 15px var(--body); text-shadow: 0 1px 0 #000; cursor: pointer; }
+.btn:hover { border-image-source: var(--btn-h); }
+.btn:active, .btn.pressed { border-image-source: var(--btn-p); padding-top: 4px; padding-bottom: 0; }
+.btn.danger { border-image-source: var(--btn-d); }
+.btn:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; }
+.toast { font: 13px var(--mono); color: var(--glow); min-height: 1.5em; }
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } .bar.low .fill.hp { animation: none; } }
+
+/* asset sets (margins in source pixels; draw widths in CSS px) */
+.kit.vx { --panel: url(a/vex/ui_panel.png); --panel-m: 36; --panel-w: 24px;
+  --btn: url(a/vex/ui_button.png); --btn-h: url(a/vex/ui_button_hover.png); --btn-p: url(a/vex/ui_button_pressed.png); --btn-d: url(a/vex/ui_button_danger.png); --btn-m: 24; --btn-w: 16px;
+  --frame: url(a/vex/ui_bar_frame.png); --frame-m: 18; --frame-w: 12px; --hp: url(a/vex/ui_bar_hp.png); --st: url(a/vex/ui_bar_stamina.png); --fill-m: 9; --fill-w: 6px; }
+.kit.px { --panel: url(a/pxl/px_panel.png); --panel-m: 8; --panel-w: 24px;
+  --btn: url(a/pxl/px_button.png); --btn-h: url(a/pxl/px_button_hover.png); --btn-p: url(a/pxl/px_button_pressed.png); --btn-d: url(a/pxl/px_button_danger.png); --btn-m: 6; --btn-w: 18px;
+  --frame: url(a/pxl/px_bar_frame.png); --frame-m: 4; --frame-w: 12px; --hp: url(a/pxl/px_bar_hp.png); --st: url(a/pxl/px_bar_stamina.png); --fill-m: 2; --fill-w: 6px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Swamp UI Kit</h1>
+    <p>Every frame, button, bar and title glyph here is a PNG generated from code by vex or pxl, stretched live with 9-slice margins. Sounds are chirp. Drag the panel's corner, move the sliders, press the buttons.</p>
+  </header>
+  <div class="grid">
+    <form class="controls" id="controls" onsubmit="return false">
+      <div class="seg" role="group" aria-label="Art style">
+        <button type="button" id="st-vx" aria-pressed="true">Vector · vex</button>
+        <button type="button" id="st-px" aria-pressed="false">Pixel · pxl</button>
+      </div>
+      <label for="title-in">Title (bitmap font) <input type="text" id="title-in" value="Bog Lantern" maxlength="24"></label>
+      <label for="pw">Panel width <output id="pw-o">520 px</output><input type="range" id="pw" min="220" max="760" value="520"></label>
+      <label for="hp">Health <output id="hp-o">72</output><input type="range" id="hp" min="0" max="100" value="72"></label>
+      <label for="stm">Stamina <output id="stm-o">45</output><input type="range" id="stm" min="0" max="100" value="45"></label>
+      <label for="sound"><span>Sound</span><span style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;color:var(--reed)"><input type="checkbox" id="sound" checked> UI sounds on</span></label>
+      <p class="note">Health under 25 pulses the bar and plays the low warning. Margins come from vex's .9.json export.</p>
+    </form>
+    <div class="stage">
+      <div class="kit vx" id="kit">
+        <div class="panel" id="panel">
+          <canvas id="title" width="10" height="10" aria-label="Panel title"></canvas>
+          <div class="row"><span>Health</span><div class="bar" id="hp-bar"><div class="fill hp" id="hp-fill"></div></div><span id="hp-v">72</span></div>
+          <div class="row"><span>Stamina</span><div class="bar"><div class="fill st" id="st-fill"></div></div><span id="st-v">45</span></div>
+          <div class="btns">
+            <button class="btn" id="b-rest" type="button">Rest by the lantern</button>
+            <button class="btn" id="b-wade" type="button">Wade</button>
+            <button class="btn danger" id="b-hit" type="button">Leech bite</button>
+          </div>
+          <div class="toast" id="toast" role="status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const S = {}; for (const n of ["hover", "click", "confirm", "cancel", "notify", "low"]) { S[n] = new Audio(`a/sfx/ui_${n}.wav`); S[n].preload = "auto" }
+const play = (n) => { if (!$("sound").checked) return; const a = S[n].cloneNode(); a.volume = 0.8; a.play().catch(() => {}) }
+
+// bitmap font: parse BMFont text, draw the title into a canvas
+let font = null
+const img = new Image(); img.src = "a/font/title.png"
+fetch("a/font/title.fnt.txt").then((r) => r.text()).then((t) => {
+  const chars = {}, kv = (l) => Object.fromEntries([...l.matchAll(/(\w+)=(-?\d+)/g)].map((m) => [m[1], +m[2]]))
+  let common = {}
+  for (const l of t.split("\n")) { if (l.startsWith("char ")) { const c = kv(l); chars[c.id] = c } else if (l.startsWith("common ")) common = kv(l) }
+  font = { chars, common }; img.decode().then(drawTitle).catch(drawTitle)
+}).catch(() => {})
+function drawTitle() {
+  const cv = $("title"), txt = $("title-in").value || " "
+  if (!font) return
+  const glyphs = [...txt].map((ch) => font.chars[ch.codePointAt(0)] || font.chars[63])
+  const w = Math.max(1, glyphs.reduce((s, g) => s + g.xadvance, 0) + 8), h = font.common.lineHeight
+  cv.width = w; cv.height = h; cv.style.width = Math.round(w * 0.75) + "px"
+  const ctx = cv.getContext("2d"); let x = 2
+  for (const g of glyphs) { ctx.drawImage(img, g.x, g.y, g.width, g.height, x + g.xoffset, g.yoffset, g.width, g.height); x += g.xadvance }
+}
+$("title-in").addEventListener("input", drawTitle)
+
+// style toggle
+for (const [id, cls] of [["st-vx", "vx"], ["st-px", "px"]]) $(id).addEventListener("click", () => {
+  $("kit").className = "kit " + cls; $("st-vx").setAttribute("aria-pressed", cls === "vx"); $("st-px").setAttribute("aria-pressed", cls === "px"); play("click")
+})
+
+// panel width
+$("pw").addEventListener("input", (e) => { $("panel").style.setProperty("--pw", e.target.value + "px"); $("panel").style.width = ""; $("pw-o").value = e.target.value + " px" })
+
+// bars
+let wasLow = false
+function setBars() {
+  const hp = +$("hp").value, st = +$("stm").value
+  $("hp-fill").style.width = `calc(${hp}% + 12px)`; $("st-fill").style.width = `calc(${st}% + 12px)`
+  $("hp-fill").hidden = hp === 0; $("st-fill").hidden = st === 0
+  $("hp-o").value = $("hp-v").textContent = hp; $("stm-o").value = $("st-v").textContent = st
+  const low = hp < 25; $("hp-bar").classList.toggle("low", low)
+  if (low && !wasLow) play("low"); wasLow = low
+}
+$("hp").addEventListener("input", setBars); $("stm").addEventListener("input", setBars); setBars()
+
+const toast = (t) => { $("toast").textContent = t; clearTimeout(toast.h); toast.h = setTimeout(() => $("toast").textContent = "", 2400) }
+const bump = (id, d) => { $(id).value = Math.max(0, Math.min(100, +$(id).value + d)); setBars() }
+for (const b of document.querySelectorAll(".btn")) b.addEventListener("pointerenter", () => play("hover"))
+$("b-rest").addEventListener("click", () => { bump("hp", 20); bump("stm", 30); play("confirm"); toast("Rested. +20 health, +30 stamina") })
+$("b-wade").addEventListener("click", () => { if (+$("stm").value < 15) { play("cancel"); toast("Too tired to wade. Rest first.") } else { bump("stm", -15); play("click"); toast("Waded through the reeds. −15 stamina") } })
+$("b-hit").addEventListener("click", () => { bump("hp", -18); play("notify"); toast("A leech bit you. −18 health") })
+</script>

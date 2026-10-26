@@ -135,16 +135,19 @@ $("title-in").addEventListener("input", drawTitle)
 
 // inventory: vex item icons (no tile) in vector style, cropped pxl item sprites in pixel style
 const slots = [...document.querySelectorAll(".slot")]
-const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = cls === "px" ? `a/items/px_${s.dataset.item}_item.png` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
+// pixel style: the selected slot plays its pxl idle GIF
+let style = "vx"
+const setIcons = (cls = style) => slots.forEach((s) => { const i = s.querySelector("img"), sel = s.getAttribute("aria-pressed") === "true"
+  i.src = cls === "px" ? `a/items/px_${s.dataset.item}_item${sel ? "_idle.gif" : ".png"}` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
 setIcons("vx")
 for (const s of slots) {
   s.addEventListener("pointerenter", () => play("hover"))
-  s.addEventListener("click", () => { slots.forEach((o) => o.setAttribute("aria-pressed", o === s)); play("click"); toast(`Selected: ${s.dataset.name}`) })
+  s.addEventListener("click", () => { slots.forEach((o) => o.setAttribute("aria-pressed", o === s)); setIcons(); play("click"); toast(`Selected: ${s.dataset.name}`) })
 }
 
 // style toggle
 for (const [id, cls] of [["st-vx", "vx"], ["st-px", "px"]]) $(id).addEventListener("click", () => {
-  $("kit").className = "kit " + cls; setIcons(cls);$("st-vx").setAttribute("aria-pressed", cls === "vx"); $("st-px").setAttribute("aria-pressed", cls === "px"); play("click")
+  $("kit").className = "kit " + cls; style = cls; setIcons();$("st-vx").setAttribute("aria-pressed", cls === "vx"); $("st-px").setAttribute("aria-pressed", cls === "px"); play("click")
 })
 
 // panel width

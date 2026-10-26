@@ -133,9 +133,9 @@ function drawTitle() {
 }
 $("title-in").addEventListener("input", drawTitle)
 
-// inventory: vex item icons (no tile) in vector style, pxl sprites in pixel style
+// inventory: vex item icons (no tile) in vector style, cropped pxl item sprites in pixel style
 const slots = [...document.querySelectorAll(".slot")]
-const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = cls === "px" ? `a/items/px_${s.dataset.item}.png` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
+const setIcons = (cls) => slots.forEach((s) => { const i = s.querySelector("img"); i.src = cls === "px" ? `a/items/px_${s.dataset.item}_item.png` : `a/items/${s.dataset.item}_item.png`; i.alt = s.dataset.name; s.title = s.dataset.name })
 setIcons("vx")
 for (const s of slots) {
   s.addEventListener("pointerenter", () => play("hover"))
